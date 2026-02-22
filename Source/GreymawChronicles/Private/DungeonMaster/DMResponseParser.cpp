@@ -21,9 +21,13 @@ FDMResponse UDMResponseParser::ParseResponse(const FString& RawText) const
     Root->TryGetStringField(TEXT("narration"), Out.Narration);
     Root->TryGetStringField(TEXT("companion_reaction"), Out.CompanionReaction);
 
-    const TArray<TSharedPtr<FJsonValue>>* ActionsJson = nullptr;
-    if (Root->TryGetArrayField(TEXT("actions"), ActionsJson))
+    auto ParseActions = [this, &Out](const TArray<TSharedPtr<FJsonValue>>* ActionsJson, TArray<FDMAction>& OutActions)
     {
+        if (!ActionsJson)
+        {
+            return;
+        }
+
         for (const TSharedPtr<FJsonValue>& ActionValue : *ActionsJson)
         {
             const TSharedPtr<FJsonObject>* ActionObj = nullptr;
@@ -34,15 +38,98 @@ FDMResponse UDMResponseParser::ParseResponse(const FString& RawText) const
 
             FDMAction ParsedAction;
             (*ActionObj)->TryGetStringField(TEXT("action"), ParsedAction.Action);
+            (*ActionObj)->TryGetStringField(TEXT("animation"), ParsedAction.Action);
             (*ActionObj)->TryGetStringField(TEXT("actor"), ParsedAction.Actor);
             (*ActionObj)->TryGetStringField(TEXT("target"), ParsedAction.Target);
 
-            if (!IsAllowedAnimationAction(ParsedAction.Action))
+            if (!ParsedAction.Action.IsEmpty() && !IsAllowedAnimationAction(ParsedAction.Action))
             {
                 Out.Error = FString::Printf(TEXT("Unknown or disallowed action: %s"), *ParsedAction.Action);
             }
 
-            Out.Actions.Add(ParsedAction);
+            OutActions.Add(ParsedAction);
+        }
+    };
+
+    auto ParseWorldChanges = [](const TArray<TSharedPtr<FJsonValue>>* ChangesJson, TArray<FDMWorldChange>& OutChanges)
+    {
+        if (!ChangesJson)
+        {
+            return;
+        }
+
+        for (const TSharedPtr<FJsonValue>& ChangeValue : *ChangesJson)
+        {
+            const TSharedPtr<FJsonObject>* ChangeObj = nullptr;
+            if (!ChangeValue.IsValid() || !ChangeValue->TryGetObject(ChangeObj) || !ChangeObj || !ChangeObj->IsValid())
+            {
+                continue;
+            }
+
+            FDMWorldChange Change;
+            (*ChangeObj)->TryGetStringField(TEXT("type"), Change.Type);
+            (*ChangeObj)->TryGetStringField(TEXT("target"), Change.Key);
+            (*ChangeObj)->TryGetStringField(TEXT("key"), Change.Key);
+
+            double Amount = 0.0;
+            if ((*ChangeObj)->TryGetNumberField(TEXT("amount"), Amount) || (*ChangeObj)->TryGetNumberField(TEXT("magnitude"), Amount))
+            {
+                Change.Value = FString::FromInt(static_cast<int32>(Amount));
+            }
+            else
+            {
+                (*ChangeObj)->TryGetStringField(TEXT("value"), Change.Value);
+            }
+
+            OutChanges.Add(Change);
+        }
+    };
+
+    const TArray<TSharedPtr<FJsonValue>>* ActionsJson = nullptr;
+    if (Root->TryGetArrayField(TEXT("actions"), ActionsJson))
+    {
+        ParseActions(ActionsJson, Out.Actions);
+    }
+
+    const TSharedPtr<FJsonObject>* CheckObj = nullptr;
+    if (Root->TryGetObjectField(TEXT("check_required"), CheckObj) && CheckObj && CheckObj->IsValid())
+    {
+        Out.Check.bCheckRequired = true;
+        (*CheckObj)->TryGetStringField(TEXT("type"), Out.Check.CheckType);
+        double DCValue = 0.0;
+        if ((*CheckObj)->TryGetNumberField(TEXT("dc"), DCValue))
+        {
+            Out.Check.DC = static_cast<int32>(DCValue);
+        }
+    }
+
+    const TSharedPtr<FJsonObject>* SuccessObj = nullptr;
+    if (Root->TryGetObjectField(TEXT("on_success"), SuccessObj) && SuccessObj && SuccessObj->IsValid())
+    {
+        (*SuccessObj)->TryGetStringField(TEXT("narration"), Out.SuccessBranch.Narration);
+
+        const TArray<TSharedPtr<FJsonValue>>* SuccessActions = nullptr;
+        if ((*SuccessObj)->TryGetArrayField(TEXT("actions"), SuccessActions))
+        {
+            ParseActions(SuccessActions, Out.SuccessBranch.Actions);
+        }
+
+        const TArray<TSharedPtr<FJsonValue>>* SuccessChanges = nullptr;
+        if ((*SuccessObj)->TryGetArrayField(TEXT("world_changes"), SuccessChanges))
+        {
+            ParseWorldChanges(SuccessChanges, Out.WorldChanges);
+        }
+    }
+
+    const TSharedPtr<FJsonObject>* FailureObj = nullptr;
+    if (Root->TryGetObjectField(TEXT("on_failure"), FailureObj) && FailureObj && FailureObj->IsValid())
+    {
+        (*FailureObj)->TryGetStringField(TEXT("narration"), Out.FailureBranch.Narration);
+
+        const TArray<TSharedPtr<FJsonValue>>* FailureActions = nullptr;
+        if ((*FailureObj)->TryGetArrayField(TEXT("actions"), FailureActions))
+        {
+            ParseActions(FailureActions, Out.FailureBranch.Actions);
         }
     }
 

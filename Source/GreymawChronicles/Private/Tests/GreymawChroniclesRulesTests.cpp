@@ -5,11 +5,16 @@
 #include "Gameplay/AbilityCheckResolver.h"
 #include "Gameplay/DiceRoller.h"
 #include "Gameplay/GCCharacterSheet.h"
+#include "Rules/CombatResolver.h"
+#include "Rules/SpellSystem.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGCCharacterSheetModifierTest, "GreymawChronicles.Rules.CharacterSheetModifiers", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGCCharacterSheetJsonRoundTripTest, "GreymawChronicles.Rules.CharacterSheetJsonRoundTrip", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDiceRollerRangesTest, "GreymawChronicles.Rules.DiceRollerRanges", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAbilityCheckAdvantageCancelTest, "GreymawChronicles.Rules.AbilityCheckAdvantageCancel", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCombatResolverCoreMathTest, "GreymawChronicles.Rules.CombatResolver.CoreMath", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCritDoubleDiceOnlyTest, "GreymawChronicles.Rules.CombatResolver.CritDoubleDiceOnly", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSpellSlotLogicTest, "GreymawChronicles.Rules.SpellSystem.SpellSlots", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FGCCharacterSheetModifierTest::RunTest(const FString& Parameters)
 {
@@ -103,6 +108,65 @@ bool FAbilityCheckAdvantageCancelTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Advantage and disadvantage should cancel to normal"), static_cast<uint8>(Result.RollMode), static_cast<uint8>(EGCRollMode::Normal));
     TestEqual(TEXT("Perception modifier should be +4"), Result.Modifier, 4);
     TestTrue(TEXT("Roll should still be d20 range"), Result.Roll >= 1 && Result.Roll <= 20);
+    return true;
+}
+
+bool FCombatResolverCoreMathTest::RunTest(const FString& Parameters)
+{
+    UCombatResolver* Resolver = NewObject<UCombatResolver>();
+    Resolver->Initialize(NewObject<UDiceRoller>());
+
+    UGCCharacterSheet* Attacker = NewObject<UGCCharacterSheet>();
+    Attacker->AbilityScores.Add(EGCAbility::Strength, 16);
+    Attacker->ProficiencyBonus = 2;
+
+    UGCCharacterSheet* Defender = NewObject<UGCCharacterSheet>();
+    Defender->ArmorClass = 12;
+
+    FWeaponAttackData Weapon;
+    Weapon.AttackAbility = EGCAbility::Strength;
+    Weapon.bProficient = true;
+
+    const FAttackResult Result = Resolver->ResolveAttackRoll(Attacker, Weapon, Defender, false, false);
+    TestEqual(TEXT("Attack modifier is ability + proficiency"), Result.Modifier, 5);
+    TestEqual(TEXT("Total equals roll + modifier"), Result.Total, Result.Roll + Result.Modifier);
+
+    return true;
+}
+
+bool FCritDoubleDiceOnlyTest::RunTest(const FString& Parameters)
+{
+    UCombatResolver* Resolver = NewObject<UCombatResolver>();
+    Resolver->Initialize(NewObject<UDiceRoller>());
+
+    FWeaponAttackData Weapon;
+    Weapon.DamageDiceCount = 1;
+    Weapon.DamageDieSize = 1;
+
+    const int32 NonCrit = Resolver->CalculateDamage(Weapon, 4, false);
+    const int32 Crit = Resolver->CalculateDamage(Weapon, 4, true);
+
+    TestEqual(TEXT("Non-crit uses one die + mod"), NonCrit, 5);
+    TestEqual(TEXT("Crit doubles dice only (2d1 + mod)"), Crit, 6);
+    return true;
+}
+
+bool FSpellSlotLogicTest::RunTest(const FString& Parameters)
+{
+    USpellSystem* SpellSystem = NewObject<USpellSystem>();
+    SpellSystem->Initialize(NewObject<UDiceRoller>());
+
+    UGCCharacterSheet* Caster = NewObject<UGCCharacterSheet>();
+    FGCSpellSlotState Slots;
+    Slots.Max = 2;
+    Slots.Current = 2;
+    Caster->SpellSlotsByLevel.Add(1, Slots);
+
+    TestTrue(TEXT("Has level 1 slot initially"), SpellSystem->HasSpellSlot(Caster, 1));
+    TestTrue(TEXT("Cantrip always available"), SpellSystem->HasSpellSlot(Caster, 0));
+    TestTrue(TEXT("First expenditure succeeds"), SpellSystem->ExpendSpellSlot(Caster, 1));
+    TestTrue(TEXT("Second expenditure succeeds"), SpellSystem->ExpendSpellSlot(Caster, 1));
+    TestFalse(TEXT("Third expenditure fails"), SpellSystem->ExpendSpellSlot(Caster, 1));
     return true;
 }
 

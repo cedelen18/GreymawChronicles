@@ -1,0 +1,13 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.7",
+  "Category": "Games",
+  "Description": "Greymaw Chronicles",
+  "Modules": [
+    {
+      "Name": "GreymawChronicles",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ]
+}
