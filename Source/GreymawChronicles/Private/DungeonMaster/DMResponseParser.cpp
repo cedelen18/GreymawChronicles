@@ -38,11 +38,39 @@ FDMResponse UDMResponseParser::ParseResponse(const FString& RawText) const
 
             FDMAction ParsedAction;
             (*ActionObj)->TryGetStringField(TEXT("action"), ParsedAction.Action);
-            (*ActionObj)->TryGetStringField(TEXT("animation"), ParsedAction.Action);
+            (*ActionObj)->TryGetStringField(TEXT("animation"), ParsedAction.Animation);
             (*ActionObj)->TryGetStringField(TEXT("actor"), ParsedAction.Actor);
             (*ActionObj)->TryGetStringField(TEXT("target"), ParsedAction.Target);
 
-            if (!ParsedAction.Action.IsEmpty() && !IsAllowedAnimationAction(ParsedAction.Action))
+            double Delay = 0.0;
+            if ((*ActionObj)->TryGetNumberField(TEXT("delay"), Delay) || (*ActionObj)->TryGetNumberField(TEXT("delay_seconds"), Delay))
+            {
+                ParsedAction.DelaySeconds = FMath::Max(0.0, static_cast<float>(Delay));
+            }
+
+            double MoveSpeed = 0.0;
+            if ((*ActionObj)->TryGetNumberField(TEXT("move_speed"), MoveSpeed) || (*ActionObj)->TryGetNumberField(TEXT("speed"), MoveSpeed))
+            {
+                ParsedAction.MoveSpeedUnitsPerSecond = FMath::Max(50.0f, static_cast<float>(MoveSpeed));
+            }
+
+            const TSharedPtr<FJsonObject>* TargetLocationObj = nullptr;
+            if ((*ActionObj)->TryGetObjectField(TEXT("target_location"), TargetLocationObj) && TargetLocationObj && TargetLocationObj->IsValid())
+            {
+                double X = 0.0, Y = 0.0, Z = 0.0;
+                const bool bHasX = (*TargetLocationObj)->TryGetNumberField(TEXT("x"), X);
+                const bool bHasY = (*TargetLocationObj)->TryGetNumberField(TEXT("y"), Y);
+                const bool bHasZ = (*TargetLocationObj)->TryGetNumberField(TEXT("z"), Z);
+                if (bHasX && bHasY)
+                {
+                    ParsedAction.bHasMoveTarget = true;
+                    ParsedAction.MoveTarget = FVector(static_cast<float>(X), static_cast<float>(Y), bHasZ ? static_cast<float>(Z) : 0.0f);
+                }
+            }
+
+            if (!ParsedAction.Action.IsEmpty() && !IsAllowedAnimationAction(ParsedAction.Action) &&
+                !ParsedAction.Action.Equals(TEXT("move"), ESearchCase::IgnoreCase) &&
+                !ParsedAction.Action.Equals(TEXT("wait"), ESearchCase::IgnoreCase))
             {
                 Out.Error = FString::Printf(TEXT("Unknown or disallowed action: %s"), *ParsedAction.Action);
             }

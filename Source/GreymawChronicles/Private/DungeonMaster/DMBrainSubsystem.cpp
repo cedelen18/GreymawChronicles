@@ -110,7 +110,30 @@ bool UDMBrainSubsystem::TryHandleScriptedTavernPrompt(const FString& PlayerInput
         Action.Action = TEXT("talk_gesture");
         Action.Actor = TEXT("marta");
         Action.Target = TEXT("player");
+        Action.DelaySeconds = 0.6f;
         Scripted.Actions.Add(Action);
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    if (Lower.Contains(TEXT("walk to bar")) || Lower.Contains(TEXT("move to bar")) || Lower.Contains(TEXT("go to bar")))
+    {
+        Scripted.Narration = TEXT("You cross the taproom floor toward the bar while the room quiets around you.");
+
+        FDMAction MoveAction;
+        MoveAction.Action = TEXT("move");
+        MoveAction.Actor = TEXT("player");
+        MoveAction.bHasMoveTarget = true;
+        MoveAction.MoveTarget = FVector(350.0f, 0.0f, 100.0f);
+        MoveAction.MoveSpeedUnitsPerSecond = 250.0f;
+        Scripted.Actions.Add(MoveAction);
+
+        FDMAction WaitAction;
+        WaitAction.Action = TEXT("wait");
+        WaitAction.Actor = TEXT("player");
+        WaitAction.DelaySeconds = 0.75f;
+        Scripted.Actions.Add(WaitAction);
+
         ResolveParsedResponse(Scripted);
         return true;
     }

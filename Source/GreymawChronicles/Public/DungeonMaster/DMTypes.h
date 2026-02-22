@@ -16,6 +16,21 @@ struct FDMAction
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FString Target;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString Animation;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bHasMoveTarget = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FVector MoveTarget = FVector::ZeroVector;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MoveSpeedUnitsPerSecond = 300.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float DelaySeconds = 0.0f;
 };
 
 USTRUCT(BlueprintType)
