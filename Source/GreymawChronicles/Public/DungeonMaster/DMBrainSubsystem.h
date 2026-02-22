@@ -23,6 +23,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMNarration, const FString&, Narr
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMActionsReady, const TArray<FDMAction>&, Actions);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMDiceResolved, const FAbilityCheckResult&, Result);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMProcessingStateChanged, bool, bIsProcessing);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInventoryChanged, const FString&, ItemName);
 
 UCLASS()
 class GREYMAWCHRONICLES_API UDMBrainSubsystem : public UGameInstanceSubsystem
@@ -44,6 +45,14 @@ public:
     UFUNCTION(BlueprintPure, Category = "DM")
     bool IsProcessing() const { return bIsProcessing; }
 
+    /** Sprint J: Read-only access for save/load system. */
+    UFUNCTION(BlueprintPure, Category = "DM")
+    UGCCharacterSheet* GetPlayerSheet() const { return PlayerSheet; }
+
+    /** Sprint J: Read-only access for save/load system. */
+    UFUNCTION(BlueprintPure, Category = "DM")
+    UDMConversationHistory* GetConversationHistory() const { return ConversationHistory; }
+
     UPROPERTY(BlueprintAssignable, Category = "DM")
     FOnDMNarration OnDMNarration;
 
@@ -55,6 +64,10 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "DM")
     FOnDMProcessingStateChanged OnDMProcessingStateChanged;
+
+    /** Sprint J: Fired when an item is added to the player's inventory. */
+    UPROPERTY(BlueprintAssignable, Category = "DM")
+    FOnInventoryChanged OnInventoryChanged;
 
 private:
     void OnOllamaCompletion(bool bSuccess, const FString& ResponseText, float LatencySeconds, FString OriginalPlayerInput);

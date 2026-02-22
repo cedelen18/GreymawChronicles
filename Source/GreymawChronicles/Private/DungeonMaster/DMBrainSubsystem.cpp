@@ -1019,6 +1019,18 @@ void UDMBrainSubsystem::ApplyWorldChanges(const TArray<FDMWorldChange>& WorldCha
             continue;
         }
 
+        // Sprint J: Inventory additions — add to CharacterSheet::Equipment
+        if (Type == TEXT("inventory_add"))
+        {
+            if (Change.Key == TEXT("player") && PlayerSheet)
+            {
+                PlayerSheet->Equipment.AddUnique(Change.Value);
+                UE_LOG(LogDMBrainSubsystem, Log, TEXT("Inventory: added '%s'"), *Change.Value);
+                OnInventoryChanged.Broadcast(Change.Value);
+            }
+            continue;
+        }
+
         // Player-targeted changes require PlayerSheet + CombatResolver
         if (Change.Key != TEXT("player") || !PlayerSheet || !CombatResolver)
         {

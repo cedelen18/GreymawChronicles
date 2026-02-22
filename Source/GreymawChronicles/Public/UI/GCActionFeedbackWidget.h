@@ -48,6 +48,10 @@ private:
     UFUNCTION()
     void HandleActionSequenceComplete();
 
+    /** Sprint J: Show toast when inventory item is acquired. */
+    UFUNCTION()
+    void HandleInventoryChanged(const FString& ItemName);
+
     struct FToastEntry
     {
         FString Text;

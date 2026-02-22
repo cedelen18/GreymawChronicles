@@ -1,6 +1,6 @@
 # First Playable - Quick Test Script
 
-**Sprint:** I
+**Sprint:** J
 **Time:** ~5 minutes
 **Prerequisite:** Successful Development Editor build (`GreymawChroniclesEditor Win64 Development`)
 
@@ -133,15 +133,44 @@ Type each prompt into the input box and press Enter. Verify the expected respons
 - **Branch (PASS):** Win coins (3 variants). **Branch (FAIL):** Lose coins (3 variants).
 - **Special:** `gamble with durgan` — Durgan refuses (pure narrative, no check).
 
+### 22. `steal from durgan` (or `pickpocket durgan`) — Sprint J (Inventory)
+- **Check:** Sleight of Hand DC 10.
+- **Branch (PASS):** Stolen coin pouch added to inventory. **Green toast:** `Acquired: stolen coin pouch`.
+- **Branch (FAIL):** Durgan notices.
+- **Equipment:** `UGCCharacterSheet::Equipment` now contains "stolen_coin_pouch".
+
+### 23. `talk to marta` — Sprint J (NPC Spawning)
+- **Action:** Camera focuses on Marta actor at (320, 30, 0) — **no fallback warning in log**.
+- **Previously:** Camera warned "ResolveActor: falling back to player pawn".
+- **Now:** Three colored mannequins visible in the scene.
+
+### 24. `look around` (repeat) — Sprint J (Save/Load)
+- **After previous actions**, quit PIE and restart.
+- **On restart:** World state, conversation history, and character sheet are **automatically restored**.
+- **Verify:** `talk to marta` still uses disposition-aware narration (if set to friendly previously).
+
+### 25. `talk to durgan` — Sprint J (NPC exists)
+- **Action:** Camera focuses on Durgan actor at (0, -200, 0).
+- **Narration:** Durgan describes the Greymaw (varies — 3 variants).
+- **Visual:** Blue-grey tinted mannequin visible.
+
+### 26. `talk to kael` — Sprint J (NPC exists)
+- **Action:** Camera focuses on Kael actor at (-150, 180, 0).
+- **Narration:** Kael offers expedition help (varies — 3 variants).
+- **Visual:** Dark green tinted mannequin visible.
+
 ## Pass Criteria
 
-- All 21 prompts produce narration text in the panel.
+- All 26 prompts produce narration text in the panel.
 - Narration text **varies** on repeated attempts of the same prompt (narration pool).
 - Fuzzy matching works: synonyms and natural phrasing resolve to correct intent.
 - 3 micro-events trigger ability checks (perception DC 12, intimidation DC 13, sleight_of_hand DC 11).
 - 6 Sprint I intents trigger correctly: Order, Steal, Listen, Persuade, Rest, Gamble.
 - `arm wrestle` still triggers athletics DC 14 check.
 - **NPC state persists within session:** ordering from Marta → friendly narration on next talk; failed steal → suspicious narration + order refusal; successful persuasion of Durgan → extra lore on next talk.
+- **Sprint J: NPC actors exist** — 3 colored mannequins visible, camera targets them by tag (no fallback).
+- **Sprint J: Inventory tracking** — successful steal adds item to Equipment, green "Acquired" toast appears.
+- **Sprint J: Save/Load** — quit and restart PIE, world state and conversation history persist.
 - Action feedback toasts appear mid-right with multi-line check breakdown (3 lines: header/roll/result) and auto-fade after ~5 seconds for checks.
 - Debug overlay updates state, action count, and check result correctly.
 - Player visually moves during movement-intent prompts.
@@ -151,7 +180,7 @@ Type each prompt into the input box and press Enter. Verify the expected respons
 
 ## Automated Tests
 
-Run all tests (31 total):
+Run all tests (41 total):
 ```
 UnrealEditor-Cmd.exe <project> -ExecCmds="Automation RunTests GreymawChronicles" -NullRHI -NoSound
 ```
@@ -177,11 +206,23 @@ UnrealEditor-Cmd.exe <project> -ExecCmds="Automation RunTests GreymawChronicles"
 - `GreymawChronicles.SprintI.NarrationPool.NewSlots` — All 16 new slots return non-empty
 - `GreymawChronicles.SprintI.Timeout.ProcessingRecovery` — Existing intents still work (regression)
 
+### Sprint J Tests (10):
+- `GreymawChronicles.SprintJ.WorldState.Serialization` — ToJSON/FromJSON round-trip
+- `GreymawChronicles.SprintJ.WorldState.ClearAll` — ClearAll empties all state
+- `GreymawChronicles.SprintJ.Inventory.AddItem` — Equipment.AddUnique behavior
+- `GreymawChronicles.SprintJ.Inventory.JSONRoundTrip` — Equipment survives CharacterSheet serialization
+- `GreymawChronicles.SprintJ.SaveLoad.ObjectCreation` — UGreymawSaveGame fields + slot name
+- `GreymawChronicles.SprintJ.SaveLoad.ConversationRoundTrip` — ConversationHistory serialize/deserialize
+- `GreymawChronicles.SprintJ.NPCSpawn.TagsRegistered` — "talk to marta" extracts subject
+- `GreymawChronicles.SprintJ.NPCSpawn.NameConsistency` — All 3 NPC names resolve
+- `GreymawChronicles.SprintJ.Inventory.DelegateExists` — OnInventoryChanged delegate exists
+- `GreymawChronicles.SprintJ.WorldState.InvalidJSON` — FromJSON handles malformed input
+
 ## Known Limitations
 
-- No skeletal meshes or animations yet (montage warnings in log are expected).
-- NPC actors (marta, kael, durgan) resolve to player pawn fallback (no NPC spawning yet).
+- Mannequin mesh may not exist in all project configurations (NPC becomes invisible tagged actor).
+- Dynamic material tint is best-effort — depends on material parameter names.
 - Camera subsystem switches mode but has no physical camera actors placed.
-- Floor and bar use engine primitive meshes (white cubes).
-- World changes (inventory_add for mysterious coin) are logged but not persisted yet.
-- NPC state resets between sessions (session-scoped WorldStateSubsystem, no save/load yet).
+- Floor and bar use engine primitive meshes (white cubes) until tavern asset pack is imported.
+- Save slot is single-slot auto-save only (no manual save management UI).
+- Tavern asset pack (Stylized Medieval Tavern, Baturinets) requires manual import from UE 5.4 dummy project.

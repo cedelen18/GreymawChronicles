@@ -120,6 +120,7 @@ void UGCActionFeedbackWidget::BindToSubsystems()
             DMBrain->OnDMProcessingStateChanged.AddDynamic(this, &UGCActionFeedbackWidget::HandleProcessingStateChanged);
             DMBrain->OnDMActionsReady.AddDynamic(this, &UGCActionFeedbackWidget::HandleActionsReady);
             DMBrain->OnDMDiceResolved.AddDynamic(this, &UGCActionFeedbackWidget::HandleDiceResolved);
+            DMBrain->OnInventoryChanged.AddDynamic(this, &UGCActionFeedbackWidget::HandleInventoryChanged);
         }
 
         ActionDirector = GI->GetSubsystem<UActionDirectorSubsystem>();
@@ -177,4 +178,12 @@ void UGCActionFeedbackWidget::HandleDiceResolved(const FAbilityCheckResult& Resu
 void UGCActionFeedbackWidget::HandleActionSequenceComplete()
 {
     PushToast(TEXT("> Ready for input"), FLinearColor(0.6f, 0.6f, 0.6f, 1.0f));
+}
+
+void UGCActionFeedbackWidget::HandleInventoryChanged(const FString& ItemName)
+{
+    // Format item name: replace underscores with spaces
+    FString Display = ItemName.Replace(TEXT("_"), TEXT(" "));
+    PushToast(FString::Printf(TEXT("Acquired: %s"), *Display),
+        FLinearColor(0.2f, 1.0f, 0.6f, 1.0f));
 }

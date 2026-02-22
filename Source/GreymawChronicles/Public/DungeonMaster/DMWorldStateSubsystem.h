@@ -34,6 +34,18 @@ public:
     UFUNCTION(BlueprintCallable, Category = "DM|WorldState")
     bool ClearState(const FString& Category, const FString& Key);
 
+    /** Sprint J: Serialize all state to JSON for save/load. */
+    UFUNCTION(BlueprintCallable, Category = "DM|WorldState")
+    FString ToJSON() const;
+
+    /** Sprint J: Restore state from JSON. Clears existing state first. Returns false on parse error. */
+    UFUNCTION(BlueprintCallable, Category = "DM|WorldState")
+    bool FromJSON(const FString& JsonText);
+
+    /** Sprint J: Remove all state entries. */
+    UFUNCTION(BlueprintCallable, Category = "DM|WorldState")
+    void ClearAll();
+
 private:
     /** Nested map: Category -> (Key -> Value) */
     TMap<FString, TMap<FString, FString>> StateStore;

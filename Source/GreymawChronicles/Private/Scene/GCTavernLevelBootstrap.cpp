@@ -1,12 +1,15 @@
 #include "Scene/GCTavernLevelBootstrap.h"
 
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/DirectionalLight.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/SkyLight.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerStart.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogTavernBootstrap, Log, All);
 
@@ -26,6 +29,7 @@ void AGCTavernLevelBootstrap::BeginPlay()
 	SpawnLighting();
 	SpawnBarMarker();
 	SpawnPlayerStart();
+	SpawnNPCs();
 
 	UE_LOG(LogTavernBootstrap, Log, TEXT("Tavern bootstrap complete."));
 }
@@ -149,4 +153,98 @@ void AGCTavernLevelBootstrap::SpawnPlayerStart()
 	FActorSpawnParameters Params;
 	Params.Name = TEXT("TavernPlayerStart");
 	World->SpawnActor<APlayerStart>(APlayerStart::StaticClass(), PlayerStartLocation, FRotator::ZeroRotator, Params);
+}
+
+void AGCTavernLevelBootstrap::SpawnNPCs()
+{
+	// Marta: barkeep, near bar, warm red tint
+	SpawnNPCActor(TEXT("marta"), MartaLocation,
+		FRotator(0.0f, 180.0f, 0.0f),
+		FLinearColor(0.8f, 0.2f, 0.1f));
+
+	// Durgan: old storyteller at a table, blue-grey tint
+	SpawnNPCActor(TEXT("durgan"), DurganLocation,
+		FRotator(0.0f, 45.0f, 0.0f),
+		FLinearColor(0.3f, 0.4f, 0.7f));
+
+	// Kael: mercenary in the corner, dark green tint
+	SpawnNPCActor(TEXT("kael"), KaelLocation,
+		FRotator(0.0f, -90.0f, 0.0f),
+		FLinearColor(0.15f, 0.5f, 0.2f));
+}
+
+AActor* AGCTavernLevelBootstrap::SpawnNPCActor(
+	const FString& NPCName,
+	const FVector& Location,
+	const FRotator& Rotation,
+	const FLinearColor& TintColor)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	FActorSpawnParameters Params;
+	Params.Name = FName(*FString::Printf(TEXT("NPC_%s"), *NPCName));
+
+	AActor* NPC = World->SpawnActor<AActor>(
+		AActor::StaticClass(), Location, Rotation, Params);
+	if (!NPC)
+	{
+		return nullptr;
+	}
+
+	// Root component
+	USceneComponent* Root = NewObject<USceneComponent>(NPC, TEXT("NPCRoot"));
+	NPC->SetRootComponent(Root);
+	Root->RegisterComponent();
+
+	// Skeletal mesh — UE5 mannequin as placeholder
+	USkeletalMeshComponent* MeshComp =
+		NewObject<USkeletalMeshComponent>(NPC, TEXT("NPCMesh"));
+	MeshComp->SetupAttachment(Root);
+
+	// Try project-local path first, then engine path
+	USkeletalMesh* Mannequin = LoadObject<USkeletalMesh>(nullptr,
+		TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny.SKM_Manny"));
+	if (!Mannequin)
+	{
+		Mannequin = LoadObject<USkeletalMesh>(nullptr,
+			TEXT("/Engine/Characters/Mannequins/Meshes/SKM_Manny.SKM_Manny"));
+	}
+
+	if (Mannequin)
+	{
+		MeshComp->SetSkeletalMesh(Mannequin);
+
+		// Dynamic material instance for color tint (best-effort)
+		if (MeshComp->GetNumMaterials() > 0)
+		{
+			UMaterialInstanceDynamic* DynMat =
+				MeshComp->CreateDynamicMaterialInstance(0);
+			if (DynMat)
+			{
+				DynMat->SetVectorParameterValue(TEXT("BodyColor"), TintColor);
+				DynMat->SetVectorParameterValue(TEXT("Base Color"), TintColor);
+				DynMat->SetVectorParameterValue(TEXT("Tint"), TintColor);
+			}
+		}
+	}
+	else
+	{
+		UE_LOG(LogTavernBootstrap, Warning,
+			TEXT("Mannequin mesh not found for NPC '%s'. "
+				"NPC will exist as invisible tagged actor."), *NPCName);
+	}
+
+	MeshComp->RegisterComponent();
+
+	// Tag for ResolveActor lookup
+	NPC->Tags.Add(FName(*NPCName));
+
+	UE_LOG(LogTavernBootstrap, Log,
+		TEXT("Spawned NPC '%s' at %s"), *NPCName, *Location.ToString());
+
+	return NPC;
 }
