@@ -20,6 +20,13 @@ void UActionDirectorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UActionDirectorSubsystem::ExecuteDMActions(const TArray<FDMAction>& InActions)
 {
+    // Sprint I: If a previous sequence is still running, force-complete it first
+    if (PendingActions.Num() > 0 && PendingActions.IsValidIndex(ActionIndex))
+    {
+        UE_LOG(LogActionDirector, Warning, TEXT("Interrupted active sequence (action %d/%d). Force-completing."), ActionIndex + 1, PendingActions.Num());
+        ForceCompleteSequence();
+    }
+
     PendingActions = InActions;
     ActionIndex = INDEX_NONE;
 
@@ -27,6 +34,12 @@ void UActionDirectorSubsystem::ExecuteDMActions(const TArray<FDMAction>& InActio
     {
         OnActionSequenceComplete.Broadcast();
         return;
+    }
+
+    // Sprint I: Sequence-level safety timeout (15s)
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().SetTimer(SequenceTimeoutHandle, this, &UActionDirectorSubsystem::ForceCompleteSequence, 15.0f, false);
     }
 
     BeginNextAction();
@@ -37,6 +50,24 @@ void UActionDirectorSubsystem::BeginNextAction()
     ++ActionIndex;
     if (!PendingActions.IsValidIndex(ActionIndex))
     {
+        // Sprint I: Clear sequence timeout on normal completion
+        if (UWorld* World = GetWorld())
+        {
+            World->GetTimerManager().ClearTimer(SequenceTimeoutHandle);
+        }
+
+        // Sprint I: Post-sequence camera reset — blend back to Establishing
+        if (CameraSubsystem)
+        {
+            AActor* PlayerPawn = GetWorld() ? UGameplayStatics::GetPlayerPawn(GetWorld(), 0) : nullptr;
+            if (PlayerPawn)
+            {
+                CameraSubsystem->SwitchCameraMode(EGreymawCameraMode::Establishing, PlayerPawn, 1.2f);
+            }
+            LastCameraMode = EGreymawCameraMode::Establishing;
+            LastCameraFocusActor = nullptr;
+        }
+
         OnActionSequenceComplete.Broadcast();
         return;
     }
@@ -54,7 +85,20 @@ void UActionDirectorSubsystem::BeginNextAction()
                 : (Lower.Contains(TEXT("close")) || Lower.Contains(TEXT("talk"))) ? EGreymawCameraMode::Close
                 : (Lower.Contains(TEXT("move")) || Lower.Contains(TEXT("walk"))) ? EGreymawCameraMode::Medium
                 : EGreymawCameraMode::Establishing;
-            CameraSubsystem->SwitchCameraMode(CameraMode, Actor, 0.6f);
+
+            // Sprint I: Variable blend times by camera mode
+            const float BlendTime = (CameraMode == EGreymawCameraMode::Establishing) ? 1.0f
+                : (CameraMode == EGreymawCameraMode::Medium) ? 0.6f
+                : (CameraMode == EGreymawCameraMode::Close) ? 0.35f
+                : 0.5f; // Combat
+
+            // Sprint I: Skip redundant camera switches (same mode + same focus actor)
+            if (CameraMode != LastCameraMode || Actor != LastCameraFocusActor)
+            {
+                CameraSubsystem->SwitchCameraMode(CameraMode, Actor, BlendTime);
+                LastCameraMode = CameraMode;
+                LastCameraFocusActor = Actor;
+            }
         }
     }
 
@@ -139,6 +183,25 @@ void UActionDirectorSubsystem::CompleteCurrentAction()
 
     MovingActor = nullptr;
     BeginNextAction();
+}
+
+void UActionDirectorSubsystem::ForceCompleteSequence()
+{
+    UE_LOG(LogActionDirector, Warning, TEXT("ForceCompleteSequence: clearing %d pending actions at index %d."), PendingActions.Num(), ActionIndex);
+
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(DelayHandle);
+        World->GetTimerManager().ClearTimer(MoveTickHandle);
+        World->GetTimerManager().ClearTimer(SequenceTimeoutHandle);
+    }
+
+    PendingActions.Empty();
+    ActionIndex = INDEX_NONE;
+    MovingActor = nullptr;
+    LastCameraFocusActor = nullptr;
+
+    OnActionSequenceComplete.Broadcast();
 }
 
 AActor* UActionDirectorSubsystem::ResolveActor(const FString& ActorId) const

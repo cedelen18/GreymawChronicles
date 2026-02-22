@@ -124,4 +124,120 @@ void UDMNarrationPool::PopulateTavernDefaults()
         TEXT("Durgan flinches when you approach, then relaxes. 'Haven't had someone check on me in weeks. I'm fine. Just... memories.' He pats your arm with a shaking hand."),
         TEXT("You offer to fetch Durgan another ale. He nods gratefully. 'You remind me of someone. Someone who came through here before the trail went bad.' His eyes go distant.")
     });
+
+    // ===================================================================
+    // Sprint I: New narration pool slots (16 slots x 3 variants = 48 lines)
+    // ===================================================================
+
+    // --- Order food ---
+    RegisterSlot(TEXT("order_food"), {
+        TEXT("Marta nods and disappears behind the bar. She returns with a steaming bowl of stew and a heel of dark bread. 'Eat up. You'll need your strength.'"),
+        TEXT("'Coming right up.' Marta ladles thick stew into a clay bowl and slides it your way with a chunk of bread. The warmth seeps into your hands."),
+        TEXT("Marta sets down a plate of bread, cheese, and a bowl of peppery stew. 'Best I've got tonight. The supply carts stopped coming last week.'")
+    });
+
+    // --- Order refused (Marta suspicious) ---
+    RegisterSlot(TEXT("order_refused"), {
+        TEXT("Marta's eyes narrow. 'I don't serve thieves. You can drink rainwater for all I care.' She turns her back and busies herself with mugs."),
+        TEXT("Marta folds her arms. 'After what you pulled? You're lucky I haven't called the watch. No food, no ale. Move along.'"),
+        TEXT("'Not a chance.' Marta slaps the bar with her cloth. 'You want service, earn back my trust first. Until then, the bar is closed to you.'")
+    });
+
+    // --- Steal setup ---
+    RegisterSlot(TEXT("steal_setup"), {
+        TEXT("You edge closer, eyes fixed on an unguarded pouch. Your fingers twitch with practiced intent as you time your move."),
+        TEXT("The crowd shifts and you see your opening. A coin pouch dangles loosely, its owner distracted by drink and conversation."),
+        TEXT("You slip through the press of bodies, angling toward your mark. One clean grab -- that's all it takes. If you're fast enough.")
+    });
+
+    // --- Steal success ---
+    RegisterSlot(TEXT("steal_success"), {
+        TEXT("Your fingers close around the pouch in one smooth motion. Nobody saw a thing. You pocket the coins and melt back into the crowd."),
+        TEXT("Quick as a shadow, the pouch is yours. A satisfying weight of coin settles in your pocket. The mark keeps drinking, oblivious."),
+        TEXT("A deft hand and good timing -- the pouch slides free without a sound. You feel the familiar thrill of a clean lift.")
+    });
+
+    // --- Steal fail ---
+    RegisterSlot(TEXT("steal_fail"), {
+        TEXT("Your hand brushes the pouch but the mark whips around. 'Hey! What do you think you're doing?' Angry eyes bore into you."),
+        TEXT("Too slow. The owner catches your wrist mid-grab and yanks your hand away. 'Thief!' The word cuts through the tavern noise."),
+        TEXT("Your fingers fumble and the pouch slips. The mark grabs your arm with surprising strength. 'I saw that. Don't try it again.'")
+    });
+
+    // --- Listen success ---
+    RegisterSlot(TEXT("listen_success"), {
+        TEXT("Through the din you catch a whispered exchange: '...the old mine shaft. That's where they went in. None came back.' The speakers fall silent when a barmaid passes."),
+        TEXT("You overhear two merchants in hushed tones: 'The Greymaw path glows at night now. Blue light, like foxfire but deeper.' One shudders visibly."),
+        TEXT("A snippet of conversation drifts your way: '...Durgan knows more than he lets on. Ask him about the ward-stones. He helped place them decades ago.'")
+    });
+
+    // --- Listen fail ---
+    RegisterSlot(TEXT("listen_fail"), {
+        TEXT("The rain drums too loudly against the windows. All you catch are fragments -- laughter, the clink of mugs, nothing useful."),
+        TEXT("You strain to hear but the hearth crackles and a group at the next table bursts into song. The moment passes."),
+        TEXT("Too much noise. Between the rain, the fire, and the crowd, every whisper dissolves into the general hum of the taproom.")
+    });
+
+    // --- Persuade Marta success ---
+    RegisterSlot(TEXT("persuade_marta_success"), {
+        TEXT("Marta's guarded expression softens. 'Alright. I believe you mean well.' She leans closer. 'The last group that went to Greymaw -- they had a map. I kept a copy.'"),
+        TEXT("Something in your words reaches her. Marta sighs. 'Fine. I'll trust you. There's a back trail the villagers used -- safer than the main road. I'll mark it for you.'"),
+        TEXT("Marta studies your face, then nods slowly. 'You've got honest eyes, I'll give you that. Here --' she slides a small iron key across the bar. 'Supply cache by the north gate.'")
+    });
+
+    // --- Persuade Durgan success ---
+    RegisterSlot(TEXT("persuade_durgan_success"), {
+        TEXT("Durgan's resistance crumbles. 'Fine. You want the truth? The Greymaw isn't a place -- it's alive. I watched it swallow a man whole.' His voice breaks."),
+        TEXT("The old man lowers his guard. 'There are ward-stones along the trail. I helped place them forty years ago. If they've cracked...' He trails off, fear in his eyes."),
+        TEXT("Durgan grips your arm. 'Listen carefully. The Greymaw sleeps in cycles. When it wakes, the ground hums. If you feel that hum -- run. Don't look back.'")
+    });
+
+    // --- Rest in tavern ---
+    RegisterSlot(TEXT("rest_tavern"), {
+        TEXT("You find a quiet corner and close your eyes. The warmth of the hearth and the murmur of voices lull you into a brief, restorative rest."),
+        TEXT("You lean back against the wall and let the tension drain from your shoulders. The taproom noise fades to a gentle hum as you catch your breath."),
+        TEXT("You settle into a chair by the fire and let yourself drift. Minutes pass in comfortable stillness. When you open your eyes, you feel steadier.")
+    });
+
+    // --- Gamble setup ---
+    RegisterSlot(TEXT("gamble_setup"), {
+        TEXT("A rough-looking patron catches your eye and rattles a cup of bone dice. 'Fancy a game, stranger? Five coppers a throw.' He grins with too few teeth."),
+        TEXT("You spot a dice game in the corner. The players look up as you approach. 'Room for one more,' says a wiry woman, pushing dice your way."),
+        TEXT("A scarred man deals cards from a worn deck. 'Stakes are simple -- copper a hand, silver if you're bold.' He shuffles with practiced ease.")
+    });
+
+    // --- Gamble win ---
+    RegisterSlot(TEXT("gamble_win"), {
+        TEXT("The dice fall in your favor! Your opponent stares, then pushes a small pile of coins your way. 'Lucky throw. Best not push it.'"),
+        TEXT("A winning hand! The table groans as you rake in the coppers. 'Beginner's luck,' someone mutters, but the coins are real enough."),
+        TEXT("The last throw seals it -- you win cleanly. A few coins richer and a reputation for luck established, you lean back with satisfaction.")
+    });
+
+    // --- Gamble lose ---
+    RegisterSlot(TEXT("gamble_lose"), {
+        TEXT("The dice betray you. Your opponent scoops the coppers with a grin. 'Better luck next time, friend.' Your pouch feels lighter."),
+        TEXT("A losing hand. The wiry woman collects your coins with a sympathetic shrug. 'The dice are fickle tonight.' You cut your losses."),
+        TEXT("The cards don't cooperate. You slide your coppers across the table and the scarred dealer pockets them. 'House always wins eventually.'")
+    });
+
+    // --- Talk Marta (friendly disposition) ---
+    RegisterSlot(TEXT("talk_marta_friendly"), {
+        TEXT("Marta's face brightens when she sees you. 'Ah, my favorite customer.' She slides an extra bread roll your way. 'The trail news is grim, but I trust you.'"),
+        TEXT("'Back again? Good.' Marta leans in with a warmer tone than before. 'I've been asking around. The missing folk -- they all took the north fork.'"),
+        TEXT("Marta greets you with a rare smile. 'You've been kind to an old barkeep. I won't forget it.' She tops off your mug unbidden.")
+    });
+
+    // --- Talk Marta (suspicious disposition) ---
+    RegisterSlot(TEXT("talk_marta_suspicious"), {
+        TEXT("Marta's eyes are cold. 'What do you want now? Keep your hands where I can see them.' She grips a heavy mug like a weapon."),
+        TEXT("'You.' Marta's voice is flat. 'I've got nothing to say to you. Try that again and I'll have Kael throw you out.' She turns away."),
+        TEXT("Marta barely glances at you. 'Still here? I'd watch my back if I were you. Word gets around in a small village.' Her tone is ice.")
+    });
+
+    // --- Talk Durgan (open disposition) ---
+    RegisterSlot(TEXT("talk_durgan_open"), {
+        TEXT("Durgan gestures you closer. 'Since you asked proper-like, I'll tell you more. The ward-stones mark a circle around the Greymaw. Break the circle and...' He mimes an explosion."),
+        TEXT("The old man's eyes are clearer now. 'You earned my trust, traveler. The Greymaw has a heart -- a stone buried deep. Find it, destroy it, and maybe this ends.'"),
+        TEXT("Durgan speaks freely now. 'Forty years I've kept quiet. But you need to know -- the Greymaw trail has a guardian. A thing of root and stone. Be ready.'")
+    });
 }

@@ -12,6 +12,7 @@ class UDMResponseParser;
 class UDMConversationHistory;
 class UDMIntentClassifier;
 class UDMNarrationPool;
+class UDMWorldStateSubsystem;
 class UCombatResolver;
 class USpellSystem;
 class UDiceRoller;
@@ -96,9 +97,19 @@ private:
     UPROPERTY()
     TObjectPtr<UGCCharacterSheet> PlayerSheet;
 
+    /** Sprint I: Session-scoped world state for NPC dispositions */
+    UPROPERTY()
+    TObjectPtr<UDMWorldStateSubsystem> WorldState;
+
     UPROPERTY(EditAnywhere, Category = "DM|Demo")
     bool bUseTavernScriptedBootstrap = true;
 
     UPROPERTY()
     bool bIsProcessing = false;
+
+    /** Sprint I: Safety timeout for processing state */
+    FTimerHandle ProcessingTimeoutHandle;
+
+    /** Sprint I: Debounce timer to prevent double-submit */
+    FTimerHandle DebounceHandle;
 };

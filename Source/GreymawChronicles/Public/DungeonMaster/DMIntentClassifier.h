@@ -18,6 +18,12 @@ enum class EDMIntent : uint8
     Challenge   UMETA(DisplayName = "Challenge / Fight / Contest"),
     Help        UMETA(DisplayName = "Help / Assist / Heal"),
     Use         UMETA(DisplayName = "Use / Interact / Open"),
+    Order       UMETA(DisplayName = "Order / Buy / Purchase"),
+    Steal       UMETA(DisplayName = "Steal / Pickpocket"),
+    Listen      UMETA(DisplayName = "Listen / Eavesdrop"),
+    Persuade    UMETA(DisplayName = "Persuade / Convince / Charm"),
+    Rest        UMETA(DisplayName = "Rest / Relax / Meditate"),
+    Gamble      UMETA(DisplayName = "Gamble / Bet / Wager"),
     Unknown     UMETA(DisplayName = "Unknown / Fallback")
 };
 

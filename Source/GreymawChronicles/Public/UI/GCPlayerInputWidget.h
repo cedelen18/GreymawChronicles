@@ -40,4 +40,7 @@ private:
 
     void SubmitCurrentText();
     void EnsureFallbackWidgets();
+
+    /** Sprint I: Safety timer to force-restore input if processing never completes. */
+    FTimerHandle InputRecoveryHandle;
 };

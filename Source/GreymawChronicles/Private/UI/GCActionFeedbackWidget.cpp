@@ -64,6 +64,11 @@ void UGCActionFeedbackWidget::NativeTick(const FGeometry& MyGeometry, float InDe
 
 void UGCActionFeedbackWidget::PushToast(const FString& Message, const FLinearColor& Color)
 {
+    PushToastWithDuration(Message, Color, ToastDuration);
+}
+
+void UGCActionFeedbackWidget::PushToastWithDuration(const FString& Message, const FLinearColor& Color, float Duration)
+{
     // Evict oldest if at capacity
     while (ActiveToasts.Num() >= MaxToasts)
     {
@@ -73,7 +78,7 @@ void UGCActionFeedbackWidget::PushToast(const FString& Message, const FLinearCol
     FToastEntry Entry;
     Entry.Text = Message;
     Entry.Color = Color;
-    Entry.RemainingSeconds = ToastDuration;
+    Entry.RemainingSeconds = Duration;
     ActiveToasts.Add(Entry);
 
     // Immediately render
@@ -147,15 +152,26 @@ void UGCActionFeedbackWidget::HandleActionsReady(const TArray<FDMAction>& Action
 
 void UGCActionFeedbackWidget::HandleDiceResolved(const FAbilityCheckResult& Result)
 {
-    const FString CritTag = Result.bCriticalSuccess ? TEXT(" CRITICAL!") : (Result.bCriticalFailure ? TEXT(" FUMBLE!") : TEXT(""));
-    const FString PassFail = Result.bSuccess ? TEXT("PASSED") : TEXT("FAILED");
-
-    const FLinearColor Color = Result.bSuccess
+    // Sprint I: Multi-line check feedback (3 toasts)
+    const FLinearColor GoldColor(1.0f, 0.85f, 0.2f, 1.0f);
+    const FLinearColor WhiteColor(1.0f, 1.0f, 1.0f, 1.0f);
+    const FLinearColor ResultColor = Result.bSuccess
         ? FLinearColor(0.1f, 1.0f, 0.3f, 1.0f)
         : FLinearColor(1.0f, 0.3f, 0.2f, 1.0f);
 
-    PushToast(FString::Printf(TEXT("> %s check: %d vs DC %d -- %s%s"),
-        *Result.CheckType, Result.Total, Result.DC, *PassFail, *CritTag), Color);
+    // Line 1: Check type header (gold)
+    const FString CheckName = Result.CheckType.ToUpper();
+    PushToastWithDuration(FString::Printf(TEXT("> %s CHECK"), *CheckName), GoldColor, CheckToastDuration);
+
+    // Line 2: Roll breakdown (white) — with crit/fumble tag
+    const FString CritTag = Result.bCriticalSuccess ? TEXT(" CRITICAL!") : (Result.bCriticalFailure ? TEXT(" FUMBLE!") : TEXT(""));
+    const FString ModSign = Result.Modifier >= 0 ? TEXT("+") : TEXT("");
+    PushToastWithDuration(FString::Printf(TEXT("> Roll: %d (d20) %s%d (mod) = %d%s"),
+        Result.Roll, *ModSign, Result.Modifier, Result.Total, *CritTag), WhiteColor, CheckToastDuration);
+
+    // Line 3: DC and result (green/red)
+    const FString PassFail = Result.bSuccess ? TEXT("PASSED") : TEXT("FAILED");
+    PushToastWithDuration(FString::Printf(TEXT("> DC %d -- %s"), Result.DC, *PassFail), ResultColor, CheckToastDuration);
 }
 
 void UGCActionFeedbackWidget::HandleActionSequenceComplete()

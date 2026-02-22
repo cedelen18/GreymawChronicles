@@ -50,6 +50,41 @@ TArray<UDMIntentClassifier::FIntentRule> UDMIntentClassifier::BuildRules()
         TEXT("pull"), TEXT("push"), TEXT("interact")
     }, 0.85f });
 
+    // Sprint I: Order / Buy / Purchase
+    Rules.Add({ EDMIntent::Order, {
+        TEXT("order"), TEXT("buy"), TEXT("purchase"), TEXT("request"), TEXT("serve"),
+        TEXT("another round")
+    }, 0.90f });
+
+    // Sprint I: Steal / Pickpocket
+    Rules.Add({ EDMIntent::Steal, {
+        TEXT("steal"), TEXT("pickpocket"), TEXT("pilfer"), TEXT("swipe"),
+        TEXT("snatch"), TEXT("pocket"), TEXT("filch"), TEXT("lift")
+    }, 0.95f });
+
+    // Sprint I: Listen / Eavesdrop
+    Rules.Add({ EDMIntent::Listen, {
+        TEXT("listen"), TEXT("eavesdrop"), TEXT("overhear"), TEXT("spy")
+    }, 0.90f });
+
+    // Sprint I: Persuade / Convince / Charm
+    Rules.Add({ EDMIntent::Persuade, {
+        TEXT("persuade"), TEXT("convince"), TEXT("bribe"), TEXT("coax"),
+        TEXT("entreat"), TEXT("charm"), TEXT("flatter"), TEXT("flirt")
+    }, 0.90f });
+
+    // Sprint I: Rest / Relax / Meditate
+    Rules.Add({ EDMIntent::Rest, {
+        TEXT("rest"), TEXT("sleep"), TEXT("meditate"), TEXT("relax"),
+        TEXT("nap"), TEXT("take a break")
+    }, 0.85f });
+
+    // Sprint I: Gamble / Bet / Wager
+    Rules.Add({ EDMIntent::Gamble, {
+        TEXT("gamble"), TEXT("bet"), TEXT("wager"), TEXT("play dice"),
+        TEXT("play cards")
+    }, 0.90f });
+
     return Rules;
 }
 
@@ -97,7 +132,12 @@ FString UDMIntentClassifier::ExtractSubject(const FString& Input, const TArray<F
         TEXT("quest board"), TEXT("notice board"), TEXT("board"),
         TEXT("bar"), TEXT("hearth"), TEXT("fire"), TEXT("fireplace"),
         TEXT("door"), TEXT("ale"), TEXT("mug"), TEXT("drink"),
-        TEXT("table"), TEXT("chair"), TEXT("post"), TEXT("window")
+        TEXT("table"), TEXT("chair"), TEXT("post"), TEXT("window"),
+        // Sprint I additions
+        TEXT("coin"), TEXT("pouch"), TEXT("purse"),
+        TEXT("corner"), TEXT("booth"), TEXT("shadows"),
+        TEXT("food"), TEXT("stew"), TEXT("bread"), TEXT("wine"),
+        TEXT("dice"), TEXT("cards"), TEXT("game")
     };
 
     // Check for longest known subject first

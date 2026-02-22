@@ -25,6 +25,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "UI|Feedback")
     void PushToast(const FString& Message, const FLinearColor& Color = FLinearColor(1.f, 1.f, 1.f, 1.f));
 
+    /** Push a toast with custom duration (Sprint I: for check results). */
+    void PushToastWithDuration(const FString& Message, const FLinearColor& Color, float Duration);
+
 protected:
     virtual void NativeConstruct() override;
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
@@ -63,6 +66,9 @@ private:
     /** How long each toast stays visible. */
     float ToastDuration = 3.0f;
 
-    /** Maximum simultaneous toasts (oldest removed first). */
-    int32 MaxToasts = 4;
+    /** Sprint I: Longer duration for check result toasts. */
+    float CheckToastDuration = 5.0f;
+
+    /** Maximum simultaneous toasts (oldest removed first). Sprint I: 4 -> 6. */
+    int32 MaxToasts = 6;
 };

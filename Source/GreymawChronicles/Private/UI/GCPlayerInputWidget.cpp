@@ -63,6 +63,25 @@ void UGCPlayerInputWidget::HandleProcessingStateChanged(bool bIsProcessing)
     {
         WaitingText->SetText(FText::FromString(bIsProcessing ? TEXT("...") : TEXT("")));
     }
+
+    // Sprint I: Input recovery timer — force-restore input if processing never completes (20s)
+    if (UWorld* World = GetWorld())
+    {
+        if (bIsProcessing)
+        {
+            World->GetTimerManager().SetTimer(InputRecoveryHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
+            {
+                UE_LOG(LogTemp, Warning, TEXT("GCPlayerInputWidget: Input recovery timeout fired. Force-restoring input."));
+                if (InputTextBox) { InputTextBox->SetIsEnabled(true); }
+                if (SubmitButton) { SubmitButton->SetIsEnabled(true); }
+                if (WaitingText) { WaitingText->SetText(FText::GetEmpty()); }
+            }), 20.0f, false);
+        }
+        else
+        {
+            World->GetTimerManager().ClearTimer(InputRecoveryHandle);
+        }
+    }
 }
 
 void UGCPlayerInputWidget::SubmitCurrentText()

@@ -5,6 +5,7 @@
 #include "DungeonMaster/DMNarrationPool.h"
 #include "DungeonMaster/DMPromptBuilder.h"
 #include "DungeonMaster/DMResponseParser.h"
+#include "DungeonMaster/DMWorldStateSubsystem.h"
 #include "Gameplay/GCCharacterSheet.h"
 #include "Gameplay/DiceRoller.h"
 #include "Ollama/OllamaSubsystem.h"
@@ -33,6 +34,9 @@ void UDMBrainSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     IntentClassifier = NewObject<UDMIntentClassifier>(this);
     NarrationPool = NewObject<UDMNarrationPool>(this);
     NarrationPool->PopulateTavernDefaults();
+
+    // Sprint I: World state subsystem for NPC dispositions
+    WorldState = GetGameInstance() ? GetGameInstance()->GetSubsystem<UDMWorldStateSubsystem>() : nullptr;
 }
 
 void UDMBrainSubsystem::SetRuleContext(UGCCharacterSheet* InPlayerSheet)
@@ -42,13 +46,64 @@ void UDMBrainSubsystem::SetRuleContext(UGCCharacterSheet* InPlayerSheet)
 
 void UDMBrainSubsystem::SetProcessingState(bool bNewState)
 {
-    if (bIsProcessing == bNewState)
-    {
-        return;
-    }
+    UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 
-    bIsProcessing = bNewState;
-    OnDMProcessingStateChanged.Broadcast(bIsProcessing);
+    if (bNewState)
+    {
+        // Cancel any pending debounce — we're starting a new processing cycle
+        if (World)
+        {
+            World->GetTimerManager().ClearTimer(DebounceHandle);
+        }
+
+        if (bIsProcessing)
+        {
+            return; // Already processing
+        }
+
+        bIsProcessing = true;
+        OnDMProcessingStateChanged.Broadcast(true);
+
+        // Sprint I: Safety timeout — force-reset if processing takes too long (20s)
+        if (World)
+        {
+            World->GetTimerManager().SetTimer(ProcessingTimeoutHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
+            {
+                UE_LOG(LogDMBrainSubsystem, Warning, TEXT("Processing state timed out after 20s. Force-resetting."));
+                bIsProcessing = false;
+                OnDMProcessingStateChanged.Broadcast(false);
+                OnDMNarration.Broadcast(TEXT("The DM seems to have lost their train of thought. Try again."));
+            }), 20.0f, false);
+        }
+    }
+    else
+    {
+        if (!bIsProcessing)
+        {
+            return; // Already idle
+        }
+
+        // Clear the safety timeout
+        if (World)
+        {
+            World->GetTimerManager().ClearTimer(ProcessingTimeoutHandle);
+        }
+
+        // Sprint I: Debounce — delay the actual idle transition by 0.3s to prevent double-submit
+        if (World)
+        {
+            World->GetTimerManager().SetTimer(DebounceHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
+            {
+                bIsProcessing = false;
+                OnDMProcessingStateChanged.Broadcast(false);
+            }), 0.3f, false);
+        }
+        else
+        {
+            bIsProcessing = false;
+            OnDMProcessingStateChanged.Broadcast(false);
+        }
+    }
 }
 
 void UDMBrainSubsystem::ProcessPlayerInput(const FString& PlayerInput)
@@ -152,7 +207,24 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
     {
         if (Subject.Contains(TEXT("marta")))
         {
-            Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta"));
+            // Sprint I: Disposition-aware narration for Marta
+            const FString MartaDisposition = WorldState ? WorldState->GetState(TEXT("npc_disposition"), TEXT("marta")) : FString();
+            if (MartaDisposition == TEXT("friendly"))
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta_friendly"));
+            }
+            else if (MartaDisposition == TEXT("suspicious"))
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta_suspicious"));
+            }
+            else if (MartaDisposition == TEXT("trusting"))
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta_friendly"));
+            }
+            else
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta"));
+            }
 
             FDMAction MoveToBar;
             MoveToBar.Action = TEXT("move");
@@ -196,7 +268,16 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
 
         if (Subject.Contains(TEXT("durgan")) || Subject.Contains(TEXT("old man")))
         {
-            Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_durgan"));
+            // Sprint I: Disposition-aware narration for Durgan
+            const FString DurganDisposition = WorldState ? WorldState->GetState(TEXT("npc_disposition"), TEXT("durgan")) : FString();
+            if (DurganDisposition == TEXT("open"))
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_durgan_open"));
+            }
+            else
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_durgan"));
+            }
 
             FDMAction TalkAction;
             TalkAction.Action = TEXT("talk_gesture");
@@ -523,6 +604,283 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
     }
 
     // ===================================================================
+    // INTENT: ORDER / BUY (Sprint I)
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Order)
+    {
+        // Check if Marta is suspicious — refuses service
+        const FString MartaDisp = WorldState ? WorldState->GetState(TEXT("npc_disposition"), TEXT("marta")) : FString();
+        if (MartaDisp == TEXT("suspicious"))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("order_refused"));
+            FDMAction ShakeHead;
+            ShakeHead.Action = TEXT("shake_head");
+            ShakeHead.Actor = TEXT("marta");
+            ShakeHead.Target = TEXT("player");
+            ShakeHead.DelaySeconds = 0.5f;
+            Scripted.Actions.Add(ShakeHead);
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        // Subject ale/drink — redirect to existing use_drink
+        if (Subject.Contains(TEXT("ale")) || Subject.Contains(TEXT("drink")) || Subject.Contains(TEXT("mug")))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("use_drink"));
+        }
+        else
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("order_food"));
+        }
+
+        FDMAction ServeAction;
+        ServeAction.Action = TEXT("nod");
+        ServeAction.Actor = TEXT("marta");
+        ServeAction.Target = TEXT("player");
+        ServeAction.DelaySeconds = 0.6f;
+        Scripted.Actions.Add(ServeAction);
+
+        // Stateful consequence: Marta becomes friendly
+        FDMWorldChange Disposition;
+        Disposition.Type = TEXT("npc_disposition");
+        Disposition.Key = TEXT("marta");
+        Disposition.Value = TEXT("friendly");
+        Scripted.WorldChanges.Add(Disposition);
+
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // ===================================================================
+    // INTENT: STEAL / PICKPOCKET (Sprint I)
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Steal)
+    {
+        Scripted.Narration = NarrationPool->PickRandom(TEXT("steal_setup"));
+        Scripted.Check.bCheckRequired = true;
+        Scripted.Check.CheckType = TEXT("sleight_of_hand");
+
+        // DC varies by target
+        FString StealTarget = TEXT("patron");
+        if (Subject.Contains(TEXT("marta")))
+        {
+            Scripted.Check.DC = 14;
+            StealTarget = TEXT("marta");
+        }
+        else if (Subject.Contains(TEXT("kael")))
+        {
+            Scripted.Check.DC = 16;
+            StealTarget = TEXT("kael");
+        }
+        else if (Subject.Contains(TEXT("durgan")))
+        {
+            Scripted.Check.DC = 10;
+            StealTarget = TEXT("durgan");
+        }
+        else
+        {
+            Scripted.Check.DC = 13;
+        }
+
+        Scripted.SuccessBranch.Narration = NarrationPool->PickRandom(TEXT("steal_success"));
+        FDMAction SuccessAction;
+        SuccessAction.Action = TEXT("idle");
+        SuccessAction.Actor = TEXT("player");
+        SuccessAction.DelaySeconds = 0.5f;
+        Scripted.SuccessBranch.Actions.Add(SuccessAction);
+
+        FDMWorldChange LootChange;
+        LootChange.Type = TEXT("inventory_add");
+        LootChange.Key = TEXT("player");
+        LootChange.Value = TEXT("stolen_coin_pouch");
+        Scripted.WorldChanges.Add(LootChange);
+
+        Scripted.FailureBranch.Narration = NarrationPool->PickRandom(TEXT("steal_fail"));
+        FDMAction FailAction;
+        FailAction.Action = TEXT("shake_head");
+        FailAction.Actor = *StealTarget;
+        FailAction.Target = TEXT("player");
+        FailAction.DelaySeconds = 0.6f;
+        Scripted.FailureBranch.Actions.Add(FailAction);
+
+        // Stateful consequence on failure: target becomes suspicious
+        FDMWorldChange SuspiciousChange;
+        SuspiciousChange.Type = TEXT("npc_disposition");
+        SuspiciousChange.Key = StealTarget;
+        SuspiciousChange.Value = TEXT("suspicious");
+        Scripted.WorldChanges.Add(SuspiciousChange);
+
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // ===================================================================
+    // INTENT: LISTEN / EAVESDROP (Sprint I)
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Listen)
+    {
+        Scripted.Narration = TEXT("You lean back and focus on the sounds of the taproom, filtering out the rain and the crackle of the hearth.");
+        Scripted.Check.bCheckRequired = true;
+        Scripted.Check.CheckType = TEXT("perception");
+        Scripted.Check.DC = 12;
+
+        Scripted.SuccessBranch.Narration = NarrationPool->PickRandom(TEXT("listen_success"));
+        FDMAction SuccessAction;
+        SuccessAction.Action = TEXT("idle");
+        SuccessAction.Actor = TEXT("player");
+        SuccessAction.DelaySeconds = 0.8f;
+        Scripted.SuccessBranch.Actions.Add(SuccessAction);
+
+        Scripted.FailureBranch.Narration = NarrationPool->PickRandom(TEXT("listen_fail"));
+        FDMAction FailAction;
+        FailAction.Action = TEXT("idle");
+        FailAction.Actor = TEXT("player");
+        FailAction.DelaySeconds = 0.5f;
+        Scripted.FailureBranch.Actions.Add(FailAction);
+
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // ===================================================================
+    // INTENT: PERSUADE / CONVINCE (Sprint I)
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Persuade)
+    {
+        Scripted.Check.bCheckRequired = true;
+        Scripted.Check.CheckType = TEXT("persuasion");
+
+        FString PersuadeTarget = TEXT("player");
+        if (Subject.Contains(TEXT("marta")))
+        {
+            Scripted.Narration = TEXT("You lean on the bar and try to charm Marta with your best persuasive tone.");
+            Scripted.Check.DC = 12;
+            PersuadeTarget = TEXT("marta");
+
+            Scripted.SuccessBranch.Narration = NarrationPool->PickRandom(TEXT("persuade_marta_success"));
+
+            FDMWorldChange TrustChange;
+            TrustChange.Type = TEXT("npc_disposition");
+            TrustChange.Key = TEXT("marta");
+            TrustChange.Value = TEXT("trusting");
+            Scripted.WorldChanges.Add(TrustChange);
+        }
+        else if (Subject.Contains(TEXT("durgan")) || Subject.Contains(TEXT("old man")))
+        {
+            Scripted.Narration = TEXT("You pull up a chair beside Durgan and try to coax more of his story out of him.");
+            Scripted.Check.DC = 14;
+            PersuadeTarget = TEXT("durgan");
+
+            Scripted.SuccessBranch.Narration = NarrationPool->PickRandom(TEXT("persuade_durgan_success"));
+
+            FDMWorldChange OpenChange;
+            OpenChange.Type = TEXT("npc_disposition");
+            OpenChange.Key = TEXT("durgan");
+            OpenChange.Value = TEXT("open");
+            Scripted.WorldChanges.Add(OpenChange);
+        }
+        else if (Subject.Contains(TEXT("kael")))
+        {
+            Scripted.Narration = TEXT("You sidle up to Kael and try to talk him into sharing what he knows.");
+            Scripted.Check.DC = 10;
+            PersuadeTarget = TEXT("kael");
+
+            Scripted.SuccessBranch.Narration = TEXT("Kael relents with a half-smile. 'Fine. I've heard things on the trail — sounds that shouldn't be there. Like the earth itself is groaning. Whatever took those villagers, it's not natural.'");
+        }
+        else
+        {
+            Scripted.Narration = TEXT("You try to persuade the room in general, but no one in particular seems to be your target.");
+            Scripted.Check.DC = 13;
+            Scripted.SuccessBranch.Narration = TEXT("A passing patron stops and shares a rumor about markings on the Greymaw trail — old symbols that glow at dusk.");
+        }
+
+        FDMAction SuccessAction;
+        SuccessAction.Action = TEXT("talk_gesture");
+        SuccessAction.Actor = PersuadeTarget;
+        SuccessAction.Target = TEXT("player");
+        SuccessAction.DelaySeconds = 0.6f;
+        Scripted.SuccessBranch.Actions.Add(SuccessAction);
+
+        Scripted.FailureBranch.Narration = TEXT("Your words fall flat. The target shrugs and turns away, unswayed by your argument.");
+        FDMAction FailAction;
+        FailAction.Action = TEXT("shake_head");
+        FailAction.Actor = PersuadeTarget;
+        FailAction.Target = TEXT("player");
+        FailAction.DelaySeconds = 0.5f;
+        Scripted.FailureBranch.Actions.Add(FailAction);
+
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // ===================================================================
+    // INTENT: REST / RELAX (Sprint I)
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Rest)
+    {
+        Scripted.Narration = NarrationPool->PickRandom(TEXT("rest_tavern"));
+
+        FDMAction RestAction;
+        RestAction.Action = TEXT("idle");
+        RestAction.Actor = TEXT("player");
+        RestAction.DelaySeconds = 1.5f;
+        Scripted.Actions.Add(RestAction);
+
+        // If player is injured, restore 1 HP
+        if (PlayerSheet && PlayerSheet->CurrentHP < PlayerSheet->MaxHP)
+        {
+            FDMWorldChange HealChange;
+            HealChange.Type = TEXT("heal");
+            HealChange.Key = TEXT("player");
+            HealChange.Value = TEXT("1");
+            Scripted.WorldChanges.Add(HealChange);
+        }
+
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // ===================================================================
+    // INTENT: GAMBLE / BET (Sprint I)
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Gamble)
+    {
+        if (Subject.Contains(TEXT("durgan")) || Subject.Contains(TEXT("old man")))
+        {
+            Scripted.Narration = TEXT("Durgan waves you off. 'I don't gamble anymore, traveler. Lost enough in my years.' He clutches his ale protectively.");
+            FDMAction WaveOff;
+            WaveOff.Action = TEXT("shake_head");
+            WaveOff.Actor = TEXT("durgan");
+            WaveOff.DelaySeconds = 0.5f;
+            Scripted.Actions.Add(WaveOff);
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        Scripted.Narration = NarrationPool->PickRandom(TEXT("gamble_setup"));
+        Scripted.Check.bCheckRequired = true;
+        Scripted.Check.CheckType = TEXT("deception");
+        Scripted.Check.DC = 13;
+
+        Scripted.SuccessBranch.Narration = NarrationPool->PickRandom(TEXT("gamble_win"));
+        FDMAction WinAction;
+        WinAction.Action = TEXT("talk_gesture");
+        WinAction.Actor = TEXT("player");
+        WinAction.DelaySeconds = 0.6f;
+        Scripted.SuccessBranch.Actions.Add(WinAction);
+
+        Scripted.FailureBranch.Narration = NarrationPool->PickRandom(TEXT("gamble_lose"));
+        FDMAction LoseAction;
+        LoseAction.Action = TEXT("idle");
+        LoseAction.Actor = TEXT("player");
+        LoseAction.DelaySeconds = 0.5f;
+        Scripted.FailureBranch.Actions.Add(LoseAction);
+
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // ===================================================================
     // INTENT: UNKNOWN / FALLBACK
     // ===================================================================
     Scripted.Narration = NarrationPool->PickRandom(TEXT("fallback"));
@@ -589,6 +947,7 @@ EGCSkill UDMBrainSubsystem::ResolveCheckSkill(const FString& CheckType) const
     if (Lower.Contains(TEXT("sleight_of_hand")) || Lower.Contains(TEXT("sleight of hand"))) return EGCSkill::SleightOfHand;
     if (Lower.Contains(TEXT("investigation"))) return EGCSkill::Investigation;
     if (Lower.Contains(TEXT("insight"))) return EGCSkill::Insight;
+    if (Lower.Contains(TEXT("deception"))) return EGCSkill::Deception;
     return EGCSkill::Athletics;
 }
 
@@ -645,15 +1004,23 @@ void UDMBrainSubsystem::ResolveParsedResponse(const FDMResponse& Parsed)
 
 void UDMBrainSubsystem::ApplyWorldChanges(const TArray<FDMWorldChange>& WorldChanges)
 {
-    if (!PlayerSheet || !CombatResolver)
-    {
-        return;
-    }
-
     for (const FDMWorldChange& Change : WorldChanges)
     {
         const FString Type = Change.Type.ToLower();
-        if (Change.Key != TEXT("player"))
+
+        // Sprint I: NPC disposition changes — stored in WorldState subsystem
+        if (Type == TEXT("npc_disposition"))
+        {
+            if (WorldState)
+            {
+                WorldState->SetState(TEXT("npc_disposition"), Change.Key, Change.Value);
+                UE_LOG(LogDMBrainSubsystem, Log, TEXT("NPC disposition: %s -> %s"), *Change.Key, *Change.Value);
+            }
+            continue;
+        }
+
+        // Player-targeted changes require PlayerSheet + CombatResolver
+        if (Change.Key != TEXT("player") || !PlayerSheet || !CombatResolver)
         {
             continue;
         }
