@@ -52,36 +52,49 @@ jobs:
       - name: Run automation tests (NullRHI headless)
         id: tests
         if: steps.compile.outcome == 'success'
-        shell: cmd
+        shell: powershell
         timeout-minutes: 10
         run: |
-          echo === Automation Tests Start ===
-          "%UE_ROOT%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" ^
-            "%PROJECT_FILE%" ^
-            -ExecCmds="Automation RunTests Greymaw;Quit" ^
-            -TestExit="Automation Test Queue Empty" ^
-            -Unattended -NullRHI ^
-            -Log="%GITHUB_WORKSPACE%\Saved\Logs\Tests.log" ^
-            -ReportExportPath="%GITHUB_WORKSPACE%\Saved\Automation"
-          set TEST_EXIT=%ERRORLEVEL%
-          echo === Test process exited with code %TEST_EXIT% ===
-          if %TEST_EXIT% neq 0 (
-            echo ::error::One or more automation tests failed (exit code %TEST_EXIT%)
-            exit /b 1
-          )
-          echo === Automation Tests Passed ===
+          Write-Host "=== Automation Tests Start ==="
+          $ueCmd = Join-Path $env:UE_ROOT "Engine\Binaries\Win64\UnrealEditor-Cmd.exe"
+          & $ueCmd `
+            "$env:PROJECT_FILE" `
+            '-ExecCmds=Automation RunTests Greymaw;Quit' `
+            '-TestExit=Automation Test Queue Empty' `
+            -Unattended -NullRHI `
+            "-Log=$env:GITHUB_WORKSPACE\Saved\Logs\Tests.log" `
+            "-ReportExportPath=$env:GITHUB_WORKSPACE\Saved\Automation"
+          $testExit = $LASTEXITCODE
+          Write-Host "=== Test process exited with code $testExit ==="
+          if ($testExit -ne 0) {
+            Write-Host "::error::One or more automation tests failed (exit code $testExit)"
+            exit 1
+          }
+          Write-Host "=== Automation Tests Passed ==="
 
       - name: Print test log tail on failure
         if: failure() && steps.tests.outcome == 'failure'
-        shell: cmd
+        shell: powershell
         run: |
-          echo === Last 80 lines of Tests.log ===
-          if exist "%GITHUB_WORKSPACE%\Saved\Logs\Tests.log" (
-            powershell -Command "Get-Content '%GITHUB_WORKSPACE%\Saved\Logs\Tests.log' -Tail 80"
-          ) else (
-            echo Tests.log not found at expected path.
-            dir /s /b "%GITHUB_WORKSPACE%\Saved\Logs\*.log" 2>nul || echo No log files found.
+          Write-Host "=== Last 80 lines of test log ==="
+          $logsDir = Join-Path $env:GITHUB_WORKSPACE "Saved\Logs"
+          $candidates = @(
+            (Join-Path $logsDir "Tests.log"),
+            (Join-Path $logsDir "GreymawChronicles.log")
           )
+          $found = $false
+          foreach ($log in $candidates) {
+            if (Test-Path $log) {
+              Write-Host "--- $log ---"
+              Get-Content $log -Tail 80
+              $found = $true
+              break
+            }
+          }
+          if (-not $found) {
+            Write-Host "No known test log found. Listing Saved/Logs:"
+            Get-ChildItem $logsDir -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+          }
 
       - name: Upload build and test logs
         if: always()
