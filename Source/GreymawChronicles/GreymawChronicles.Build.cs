@@ -24,7 +24,8 @@ public class GreymawChronicles : ModuleRules
 
         PrivateDependencyModuleNames.AddRange(new string[]
         {
-            "Projects"
+            "Projects",
+            "EngineSettings"
         });
     }
 }
