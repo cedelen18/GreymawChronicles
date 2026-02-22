@@ -10,10 +10,13 @@ class UOllamaSubsystem;
 class UDMPromptBuilder;
 class UDMResponseParser;
 class UDMConversationHistory;
+class UDMIntentClassifier;
+class UDMNarrationPool;
 class UCombatResolver;
 class USpellSystem;
 class UDiceRoller;
 class UGCCharacterSheet;
+struct FDMIntentResult;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMNarration, const FString&, Narration);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMActionsReady, const TArray<FDMAction>&, Actions);
@@ -57,10 +60,17 @@ private:
     void ApplyWorldChanges(const TArray<FDMWorldChange>& WorldChanges);
     EGCSkill ResolveCheckSkill(const FString& CheckType) const;
     bool TryHandleScriptedTavernPrompt(const FString& PlayerInput);
+    bool HandleIntentScripted(const FDMIntentResult& Intent, const FString& RawInput);
     void SetProcessingState(bool bNewState);
 
     UPROPERTY()
     TObjectPtr<UDMPromptBuilder> PromptBuilder;
+
+    UPROPERTY()
+    TObjectPtr<UDMIntentClassifier> IntentClassifier;
+
+    UPROPERTY()
+    TObjectPtr<UDMNarrationPool> NarrationPool;
 
     UPROPERTY()
     TObjectPtr<UDMResponseParser> ResponseParser;

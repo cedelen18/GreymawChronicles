@@ -4,6 +4,7 @@
 #include "UI/DMTextPanelWidget.h"
 #include "UI/GCDebugOverlayWidget.h"
 #include "UI/GCHUDOverlayWidget.h"
+#include "UI/GCActionFeedbackWidget.h"
 #include "UI/GCPlayerInputWidget.h"
 
 #include "Blueprint/WidgetTree.h"
@@ -47,6 +48,7 @@ void UGCMainHUDWidget::EnsureFallbackWidgets()
     DMTextPanel = WidgetTree->ConstructWidget<UDMTextPanelWidget>(UDMTextPanelWidget::StaticClass(), TEXT("DMTextPanel"));
     PlayerInput = WidgetTree->ConstructWidget<UGCPlayerInputWidget>(UGCPlayerInputWidget::StaticClass(), TEXT("PlayerInput"));
     DebugOverlay = WidgetTree->ConstructWidget<UGCDebugOverlayWidget>(UGCDebugOverlayWidget::StaticClass(), TEXT("DebugOverlay"));
+    ActionFeedback = WidgetTree->ConstructWidget<UGCActionFeedbackWidget>(UGCActionFeedbackWidget::StaticClass(), TEXT("ActionFeedback"));
 
     if (UCanvasPanelSlot* OverlaySlot = Root->AddChildToCanvas(HUDOverlay))
     {
@@ -59,6 +61,13 @@ void UGCMainHUDWidget::EnsureFallbackWidgets()
     {
         DebugSlot->SetAutoSize(true);
         DebugSlot->SetPosition(FVector2D(800.0f, 20.0f));
+    }
+
+    // Action feedback toasts — center-right
+    if (UCanvasPanelSlot* FeedbackSlot = Root->AddChildToCanvas(ActionFeedback))
+    {
+        FeedbackSlot->SetAutoSize(true);
+        FeedbackSlot->SetPosition(FVector2D(860.0f, 300.0f));
     }
 
     if (UCanvasPanelSlot* DMPanelSlot = Root->AddChildToCanvas(DMTextPanel))

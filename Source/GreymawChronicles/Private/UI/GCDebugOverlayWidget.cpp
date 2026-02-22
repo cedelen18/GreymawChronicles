@@ -30,6 +30,12 @@ void UGCDebugOverlayWidget::EnsureFallbackWidgets()
         return;
     }
 
+    if (!WidgetTree)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("GCDebugOverlayWidget: WidgetTree is null, cannot create fallback widgets."));
+        return;
+    }
+
     UVerticalBox* Root = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("DebugRoot"));
     WidgetTree->RootWidget = Root;
 

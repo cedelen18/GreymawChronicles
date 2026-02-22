@@ -98,6 +98,14 @@ void UActionDirectorSubsystem::BeginMoveAction(AActor* Actor, const FDMAction& A
     MoveStartTime = GetWorld()->GetTimeSeconds();
 
     GetWorld()->GetTimerManager().SetTimer(MoveTickHandle, this, &UActionDirectorSubsystem::TickMoveStep, 0.02f, true);
+
+    // Safety timeout: force-complete if move takes longer than 10 seconds (stuck prevention)
+    static constexpr float MaxMoveDuration = 10.0f;
+    if (MoveDuration > MaxMoveDuration)
+    {
+        UE_LOG(LogActionDirector, Warning, TEXT("Move duration %.1fs exceeds safety limit; clamping to %.0fs."), MoveDuration, MaxMoveDuration);
+        MoveDuration = MaxMoveDuration;
+    }
 }
 
 void UActionDirectorSubsystem::TickMoveStep()

@@ -1,6 +1,8 @@
 #include "DungeonMaster/DMBrainSubsystem.h"
 
 #include "DungeonMaster/DMConversationHistory.h"
+#include "DungeonMaster/DMIntentClassifier.h"
+#include "DungeonMaster/DMNarrationPool.h"
 #include "DungeonMaster/DMPromptBuilder.h"
 #include "DungeonMaster/DMResponseParser.h"
 #include "Gameplay/GCCharacterSheet.h"
@@ -27,6 +29,10 @@ void UDMBrainSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     CombatResolver->Initialize(DiceRoller);
     SpellSystem = NewObject<USpellSystem>(this);
     SpellSystem->Initialize(DiceRoller);
+
+    IntentClassifier = NewObject<UDMIntentClassifier>(this);
+    NarrationPool = NewObject<UDMNarrationPool>(this);
+    NarrationPool->PopulateTavernDefaults();
 }
 
 void UDMBrainSubsystem::SetRuleContext(UGCCharacterSheet* InPlayerSheet)
@@ -92,15 +98,42 @@ void UDMBrainSubsystem::ProcessPlayerInput(const FString& PlayerInput)
 
 bool UDMBrainSubsystem::TryHandleScriptedTavernPrompt(const FString& PlayerInput)
 {
+    if (!IntentClassifier || !NarrationPool)
+    {
+        return false;
+    }
+
+    const FDMIntentResult Intent = IntentClassifier->Classify(PlayerInput);
+    return HandleIntentScripted(Intent, PlayerInput);
+}
+
+bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, const FString& RawInput)
+{
+    if (!NarrationPool)
+    {
+        return false;
+    }
+
     FDMResponse Scripted;
     Scripted.bValid = true;
 
-    const FString Lower = PlayerInput.ToLower();
+    const FString Lower = RawInput.ToLower();
+    const FString& Subject = Intent.Subject;
 
-    // --- LOOK AROUND ---
-    if (Lower.Contains(TEXT("look around")) || Lower.Contains(TEXT("where am i")) || Lower.Contains(TEXT("examine room")))
+    // ===================================================================
+    // INTENT: LOOK / OBSERVE
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Look)
     {
-        Scripted.Narration = TEXT("Warm lamplight spills across the Thornhaven taproom. Marta polishes a mug behind the bar, Kael leans against a post watching the room, and old Durgan mutters into his ale as rain taps the windows. A hearth crackles in the corner and a faded quest board hangs by the door.");
+        // Subject-specific look
+        if (Subject.Contains(TEXT("hearth")) || Subject.Contains(TEXT("fire")))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("inspect_hearth"));
+        }
+        else
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("look_around"));
+        }
 
         FDMAction LookAction;
         LookAction.Action = TEXT("idle");
@@ -112,142 +145,387 @@ bool UDMBrainSubsystem::TryHandleScriptedTavernPrompt(const FString& PlayerInput
         return true;
     }
 
-    // --- TALK TO MARTA ---
-    if (Lower.Contains(TEXT("talk to marta")) || Lower.Contains(TEXT("speak to marta")) || Lower.Contains(TEXT("ask marta")))
+    // ===================================================================
+    // INTENT: TALK / SPEAK / ASK
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Talk)
     {
-        Scripted.Narration = TEXT("Marta lowers her voice. 'Three villagers vanished near the Greymaw trail last week. The guard won't go, says it's bad luck. If you're heading that way, I'll pay fifty gold for news of what happened to them.'");
+        if (Subject.Contains(TEXT("marta")))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta"));
 
-        FDMAction MoveToBar;
-        MoveToBar.Action = TEXT("move");
-        MoveToBar.Actor = TEXT("player");
-        MoveToBar.bHasMoveTarget = true;
-        MoveToBar.MoveTarget = FVector(320.0f, 0.0f, 100.0f);
-        MoveToBar.MoveSpeedUnitsPerSecond = 200.0f;
-        Scripted.Actions.Add(MoveToBar);
+            FDMAction MoveToBar;
+            MoveToBar.Action = TEXT("move");
+            MoveToBar.Actor = TEXT("player");
+            MoveToBar.bHasMoveTarget = true;
+            MoveToBar.MoveTarget = FVector(320.0f, 0.0f, 100.0f);
+            MoveToBar.MoveSpeedUnitsPerSecond = 200.0f;
+            Scripted.Actions.Add(MoveToBar);
 
-        FDMAction TalkAction;
-        TalkAction.Action = TEXT("talk_gesture");
-        TalkAction.Actor = TEXT("marta");
-        TalkAction.Target = TEXT("player");
-        TalkAction.DelaySeconds = 0.6f;
-        Scripted.Actions.Add(TalkAction);
+            FDMAction TalkAction;
+            TalkAction.Action = TEXT("talk_gesture");
+            TalkAction.Actor = TEXT("marta");
+            TalkAction.Target = TEXT("player");
+            TalkAction.DelaySeconds = 0.6f;
+            Scripted.Actions.Add(TalkAction);
 
-        FDMAction NodAction;
-        NodAction.Action = TEXT("nod");
-        NodAction.Actor = TEXT("marta");
-        NodAction.DelaySeconds = 0.4f;
-        Scripted.Actions.Add(NodAction);
+            FDMAction NodAction;
+            NodAction.Action = TEXT("nod");
+            NodAction.Actor = TEXT("marta");
+            NodAction.DelaySeconds = 0.4f;
+            Scripted.Actions.Add(NodAction);
 
-        ResolveParsedResponse(Scripted);
-        return true;
-    }
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
 
-    // --- WALK TO BAR ---
-    if (Lower.Contains(TEXT("walk to bar")) || Lower.Contains(TEXT("move to bar")) || Lower.Contains(TEXT("go to bar")) || Lower.Contains(TEXT("approach bar")))
-    {
-        Scripted.Narration = TEXT("You cross the taproom floor toward the bar. Floorboards creak underfoot and conversations pause as the regulars size you up.");
+        if (Subject.Contains(TEXT("kael")))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_kael"));
 
-        FDMAction MoveAction;
-        MoveAction.Action = TEXT("move");
-        MoveAction.Actor = TEXT("player");
-        MoveAction.bHasMoveTarget = true;
-        MoveAction.MoveTarget = FVector(350.0f, 0.0f, 100.0f);
-        MoveAction.MoveSpeedUnitsPerSecond = 250.0f;
-        Scripted.Actions.Add(MoveAction);
+            FDMAction TalkAction;
+            TalkAction.Action = TEXT("talk_gesture");
+            TalkAction.Actor = TEXT("kael");
+            TalkAction.Target = TEXT("player");
+            TalkAction.DelaySeconds = 0.8f;
+            Scripted.Actions.Add(TalkAction);
 
-        FDMAction WaitAction;
-        WaitAction.Action = TEXT("wait");
-        WaitAction.Actor = TEXT("player");
-        WaitAction.DelaySeconds = 0.75f;
-        Scripted.Actions.Add(WaitAction);
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
 
+        if (Subject.Contains(TEXT("durgan")) || Subject.Contains(TEXT("old man")))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_durgan"));
+
+            FDMAction TalkAction;
+            TalkAction.Action = TEXT("talk_gesture");
+            TalkAction.Actor = TEXT("durgan");
+            TalkAction.Target = TEXT("player");
+            TalkAction.DelaySeconds = 1.0f;
+            Scripted.Actions.Add(TalkAction);
+
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        // Generic talk with no specific subject — reminder
+        Scripted.Narration = NarrationPool->PickRandom(TEXT("fallback"));
         FDMAction IdleAction;
         IdleAction.Action = TEXT("idle");
         IdleAction.Actor = TEXT("player");
         IdleAction.DelaySeconds = 0.5f;
         Scripted.Actions.Add(IdleAction);
-
         ResolveParsedResponse(Scripted);
         return true;
     }
 
-    // --- ARM WRESTLE KAEL (ability check path) ---
-    if (Lower.Contains(TEXT("arm wrestle")) || Lower.Contains(TEXT("wrestle kael")) || Lower.Contains(TEXT("challenge kael")))
+    // ===================================================================
+    // INTENT: MOVE / GO
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Move)
     {
-        Scripted.Narration = TEXT("Kael grins and slams his elbow on the table. 'Let's see what you've got, adventurer.' The taproom cheers as you grip hands.");
+        if (Subject.Contains(TEXT("bar")))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("move_bar"));
+
+            FDMAction MoveAction;
+            MoveAction.Action = TEXT("move");
+            MoveAction.Actor = TEXT("player");
+            MoveAction.bHasMoveTarget = true;
+            MoveAction.MoveTarget = FVector(350.0f, 0.0f, 100.0f);
+            MoveAction.MoveSpeedUnitsPerSecond = 250.0f;
+            Scripted.Actions.Add(MoveAction);
+
+            FDMAction WaitAction;
+            WaitAction.Action = TEXT("wait");
+            WaitAction.Actor = TEXT("player");
+            WaitAction.DelaySeconds = 0.75f;
+            Scripted.Actions.Add(WaitAction);
+
+            FDMAction IdleAction;
+            IdleAction.Action = TEXT("idle");
+            IdleAction.Actor = TEXT("player");
+            IdleAction.DelaySeconds = 0.5f;
+            Scripted.Actions.Add(IdleAction);
+
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        if (Subject.Contains(TEXT("door")))
+        {
+            Scripted.Narration = TEXT("You move toward the tavern door. The rain hammers against the other side. A cold draft slips through the frame. The Greymaw trail starts just beyond the village gate.");
+
+            FDMAction MoveAction;
+            MoveAction.Action = TEXT("move");
+            MoveAction.Actor = TEXT("player");
+            MoveAction.bHasMoveTarget = true;
+            MoveAction.MoveTarget = FVector(-300.0f, 200.0f, 100.0f);
+            MoveAction.MoveSpeedUnitsPerSecond = 200.0f;
+            Scripted.Actions.Add(MoveAction);
+
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        if (Subject.Contains(TEXT("hearth")) || Subject.Contains(TEXT("fire")))
+        {
+            Scripted.Narration = TEXT("You cross toward the hearth. The warmth wraps around you like a cloak. From here you can see the whole room.");
+
+            FDMAction MoveAction;
+            MoveAction.Action = TEXT("move");
+            MoveAction.Actor = TEXT("player");
+            MoveAction.bHasMoveTarget = true;
+            MoveAction.MoveTarget = FVector(-200.0f, -150.0f, 100.0f);
+            MoveAction.MoveSpeedUnitsPerSecond = 200.0f;
+            Scripted.Actions.Add(MoveAction);
+
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        // Generic move fallback
+        Scripted.Narration = TEXT("You shift your position in the taproom, taking in the scene from a new angle.");
+        FDMAction IdleAction;
+        IdleAction.Action = TEXT("idle");
+        IdleAction.Actor = TEXT("player");
+        IdleAction.DelaySeconds = 0.5f;
+        Scripted.Actions.Add(IdleAction);
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // ===================================================================
+    // INTENT: INSPECT / EXAMINE / READ
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Inspect)
+    {
+        if (Subject.Contains(TEXT("board")) || Subject.Contains(TEXT("quest")) || Subject.Contains(TEXT("notice")))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("inspect_board"));
+
+            FDMAction LookAction;
+            LookAction.Action = TEXT("idle");
+            LookAction.Actor = TEXT("player");
+            LookAction.DelaySeconds = 1.5f;
+            Scripted.Actions.Add(LookAction);
+
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        if (Subject.Contains(TEXT("hearth")) || Subject.Contains(TEXT("fire")))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("inspect_hearth"));
+
+            FDMAction LookAction;
+            LookAction.Action = TEXT("idle");
+            LookAction.Actor = TEXT("player");
+            LookAction.DelaySeconds = 1.0f;
+            Scripted.Actions.Add(LookAction);
+
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        // MICRO-EVENT 1: Inspect the ale / mug — Perception check to notice something in the drink
+        if (Subject.Contains(TEXT("ale")) || Subject.Contains(TEXT("mug")) || Subject.Contains(TEXT("drink")))
+        {
+            Scripted.Narration = TEXT("You peer into the dark ale. Something catches your eye — a faint shimmer beneath the foam. Is it just a trick of the light?");
+            Scripted.Check.bCheckRequired = true;
+            Scripted.Check.CheckType = TEXT("perception");
+            Scripted.Check.DC = 12;
+
+            Scripted.SuccessBranch.Narration = TEXT("You spot a tiny rune etched into the bottom of the mug — a ward against poison. Marta's been careful lately. She nods when she sees you noticed.");
+            FDMAction SuccessAction;
+            SuccessAction.Action = TEXT("nod");
+            SuccessAction.Actor = TEXT("marta");
+            SuccessAction.Target = TEXT("player");
+            SuccessAction.DelaySeconds = 0.5f;
+            Scripted.SuccessBranch.Actions.Add(SuccessAction);
+
+            Scripted.FailureBranch.Narration = TEXT("The shimmer fades. Probably just the lamplight on the foam. You take a sip — tastes like regular ale, if a bit flat.");
+            FDMAction FailAction;
+            FailAction.Action = TEXT("idle");
+            FailAction.Actor = TEXT("player");
+            FailAction.DelaySeconds = 0.5f;
+            Scripted.FailureBranch.Actions.Add(FailAction);
+
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        // Generic inspect
+        Scripted.Narration = TEXT("You take a closer look, but nothing out of the ordinary stands out. The taproom carries on as usual.");
+        FDMAction IdleAction;
+        IdleAction.Action = TEXT("idle");
+        IdleAction.Actor = TEXT("player");
+        IdleAction.DelaySeconds = 0.8f;
+        Scripted.Actions.Add(IdleAction);
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // ===================================================================
+    // INTENT: CHALLENGE / FIGHT / CONTEST
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Challenge)
+    {
+        // Arm wrestle / challenge Kael (original)
+        if (Subject.Contains(TEXT("kael")) || Lower.Contains(TEXT("arm wrestle")) || Lower.Contains(TEXT("wrestle")))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("challenge_kael_setup"));
+            Scripted.Check.bCheckRequired = true;
+            Scripted.Check.CheckType = TEXT("athletics");
+            Scripted.Check.DC = 14;
+
+            Scripted.SuccessBranch.Narration = NarrationPool->PickRandom(TEXT("challenge_kael_win"));
+            FDMAction SuccessGesture;
+            SuccessGesture.Action = TEXT("talk_gesture");
+            SuccessGesture.Actor = TEXT("kael");
+            SuccessGesture.Target = TEXT("player");
+            SuccessGesture.DelaySeconds = 0.5f;
+            Scripted.SuccessBranch.Actions.Add(SuccessGesture);
+
+            Scripted.FailureBranch.Narration = NarrationPool->PickRandom(TEXT("challenge_kael_lose"));
+            FDMAction FailGesture;
+            FailGesture.Action = TEXT("shake_head");
+            FailGesture.Actor = TEXT("kael");
+            FailGesture.Target = TEXT("player");
+            FailGesture.DelaySeconds = 0.5f;
+            Scripted.FailureBranch.Actions.Add(FailGesture);
+
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        // MICRO-EVENT 2: Intimidate a rowdy patron — Intimidation check (pure narrative, no combat)
+        Scripted.Narration = TEXT("A heavyset patron at the corner table has been getting louder with each drink. He knocks over a mug and sneers at the room. You step forward, meeting his gaze.");
         Scripted.Check.bCheckRequired = true;
-        Scripted.Check.CheckType = TEXT("athletics");
-        Scripted.Check.DC = 14;
+        Scripted.Check.CheckType = TEXT("intimidation");
+        Scripted.Check.DC = 13;
 
-        Scripted.SuccessBranch.Narration = TEXT("With a surge of strength, you slam Kael's hand to the table! The room erupts. Kael laughs and claps you on the shoulder. 'Stronger than you look!'");
-        FDMAction SuccessGesture;
-        SuccessGesture.Action = TEXT("talk_gesture");
-        SuccessGesture.Actor = TEXT("kael");
-        SuccessGesture.Target = TEXT("player");
-        SuccessGesture.DelaySeconds = 0.5f;
-        Scripted.SuccessBranch.Actions.Add(SuccessGesture);
+        Scripted.SuccessBranch.Narration = TEXT("The patron falters under your stare. He mumbles an apology, rights the mug, and shrinks back into his seat. Marta gives you a grateful nod from behind the bar.");
+        FDMAction SuccessNod;
+        SuccessNod.Action = TEXT("nod");
+        SuccessNod.Actor = TEXT("marta");
+        SuccessNod.Target = TEXT("player");
+        SuccessNod.DelaySeconds = 0.5f;
+        Scripted.SuccessBranch.Actions.Add(SuccessNod);
 
-        Scripted.FailureBranch.Narration = TEXT("Kael overpowers you with a grin and pins your arm. 'Good effort! Next round's on me.' He slides a mug your way.");
-        FDMAction FailGesture;
-        FailGesture.Action = TEXT("shake_head");
-        FailGesture.Actor = TEXT("kael");
-        FailGesture.Target = TEXT("player");
-        FailGesture.DelaySeconds = 0.5f;
-        Scripted.FailureBranch.Actions.Add(FailGesture);
+        Scripted.FailureBranch.Narration = TEXT("The patron snorts. 'Mind your business, outsider.' He turns back to his drink, unbothered. A few patrons glance your way with mild amusement.");
+        FDMAction FailIdle;
+        FailIdle.Action = TEXT("idle");
+        FailIdle.Actor = TEXT("player");
+        FailIdle.DelaySeconds = 0.6f;
+        Scripted.FailureBranch.Actions.Add(FailIdle);
 
         ResolveParsedResponse(Scripted);
         return true;
     }
 
-    // --- TALK TO KAEL ---
-    if (Lower.Contains(TEXT("talk to kael")) || Lower.Contains(TEXT("speak to kael")) || Lower.Contains(TEXT("kael")))
+    // ===================================================================
+    // INTENT: HELP / ASSIST
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Help)
     {
-        Scripted.Narration = TEXT("Kael straightens up. 'I've been keeping an eye on the trail north. Something doesn't feel right — too quiet. If you're going, I'm coming with you.'");
+        if (Subject.Contains(TEXT("durgan")) || Subject.Contains(TEXT("old man")))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("help_durgan"));
 
-        FDMAction TalkAction;
-        TalkAction.Action = TEXT("talk_gesture");
-        TalkAction.Actor = TEXT("kael");
-        TalkAction.Target = TEXT("player");
-        TalkAction.DelaySeconds = 0.8f;
-        Scripted.Actions.Add(TalkAction);
+            FDMAction TalkAction;
+            TalkAction.Action = TEXT("talk_gesture");
+            TalkAction.Actor = TEXT("player");
+            TalkAction.Target = TEXT("durgan");
+            TalkAction.DelaySeconds = 0.8f;
+            Scripted.Actions.Add(TalkAction);
 
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        // Generic help — pure narrative path (no check)
+        Scripted.Narration = TEXT("You offer a hand to no one in particular. Marta glances over. 'If you want to help, look into those disappearances. That would be more use than anything else.'");
+        FDMAction IdleAction;
+        IdleAction.Action = TEXT("idle");
+        IdleAction.Actor = TEXT("player");
+        IdleAction.DelaySeconds = 0.5f;
+        Scripted.Actions.Add(IdleAction);
         ResolveParsedResponse(Scripted);
         return true;
     }
 
-    // --- TALK TO DURGAN ---
-    if (Lower.Contains(TEXT("durgan")) || Lower.Contains(TEXT("old man")))
+    // ===================================================================
+    // INTENT: USE / INTERACT
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Use)
     {
-        Scripted.Narration = TEXT("Old Durgan peers at you with rheumy eyes. 'The Greymaw... I saw it once. Decades ago. A mouth in the earth that swallowed the screams.' He turns back to his ale, hands shaking.");
+        // MICRO-EVENT 3: Pick up / grab a suspicious coin on the floor — Sleight of Hand check
+        if (Subject.Contains(TEXT("drink")) || Subject.Contains(TEXT("ale")) || Subject.Contains(TEXT("mug")))
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("use_drink"));
 
-        FDMAction TalkAction;
-        TalkAction.Action = TEXT("talk_gesture");
-        TalkAction.Actor = TEXT("durgan");
-        TalkAction.Target = TEXT("player");
-        TalkAction.DelaySeconds = 1.0f;
-        Scripted.Actions.Add(TalkAction);
+            FDMAction DrinkAction;
+            DrinkAction.Action = TEXT("idle");
+            DrinkAction.Actor = TEXT("player");
+            DrinkAction.DelaySeconds = 1.0f;
+            Scripted.Actions.Add(DrinkAction);
+
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        // Interact with door
+        if (Subject.Contains(TEXT("door")))
+        {
+            Scripted.Narration = TEXT("You push the tavern door open a crack. Cold rain blows in and the wind carries a sound — distant, rhythmic, like breathing. The Greymaw trail awaits, but the night is dark.");
+
+            FDMAction IdleAction;
+            IdleAction.Action = TEXT("idle");
+            IdleAction.Actor = TEXT("player");
+            IdleAction.DelaySeconds = 1.0f;
+            Scripted.Actions.Add(IdleAction);
+
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        // Pick up coin on the floor (generic "use" / "grab" / "pick up" with no obvious subject)
+        Scripted.Narration = TEXT("You notice a glint under a nearby table — a coin, half-buried in grime. You reach for it, but another hand darts out from a shadowed booth.");
+        Scripted.Check.bCheckRequired = true;
+        Scripted.Check.CheckType = TEXT("sleight_of_hand");
+        Scripted.Check.DC = 11;
+
+        Scripted.SuccessBranch.Narration = TEXT("Your fingers close around the coin first. It's heavier than it should be — not copper, but something older. The hand retreats into the shadows without a word.");
+        FDMAction SuccessAction;
+        SuccessAction.Action = TEXT("idle");
+        SuccessAction.Actor = TEXT("player");
+        SuccessAction.DelaySeconds = 0.5f;
+        Scripted.SuccessBranch.Actions.Add(SuccessAction);
+
+        // World change: award the mysterious coin
+        FDMWorldChange CoinChange;
+        CoinChange.Type = TEXT("inventory_add");
+        CoinChange.Key = TEXT("player");
+        CoinChange.Value = TEXT("mysterious_coin");
+        Scripted.SuccessBranch.Actions[0].DelaySeconds = 0.5f;
+
+        Scripted.FailureBranch.Narration = TEXT("The shadowed hand snatches the coin away before you can grab it. You hear a dry chuckle from the booth, then silence.");
+        FDMAction FailAction;
+        FailAction.Action = TEXT("idle");
+        FailAction.Actor = TEXT("player");
+        FailAction.DelaySeconds = 0.5f;
+        Scripted.FailureBranch.Actions.Add(FailAction);
 
         ResolveParsedResponse(Scripted);
         return true;
     }
 
-    // --- EXAMINE QUEST BOARD ---
-    if (Lower.Contains(TEXT("quest board")) || Lower.Contains(TEXT("notice board")) || Lower.Contains(TEXT("board")))
-    {
-        Scripted.Narration = TEXT("The quest board holds a single weathered parchment: 'MISSING — Three villagers last seen on the Greymaw trail. 50 gold reward for information. — Marta, Thornhaven Taproom.'");
-
-        FDMAction LookAction;
-        LookAction.Action = TEXT("idle");
-        LookAction.Actor = TEXT("player");
-        LookAction.DelaySeconds = 1.5f;
-        Scripted.Actions.Add(LookAction);
-
-        ResolveParsedResponse(Scripted);
-        return true;
-    }
-
-    // --- CATCH-ALL: unrecognized input in scripted mode ---
-    Scripted.Narration = TEXT("You pause, considering your next move. The taproom hums around you — Marta at the bar, Kael by the post, Durgan in his corner, and a quest board by the door.");
+    // ===================================================================
+    // INTENT: UNKNOWN / FALLBACK
+    // ===================================================================
+    Scripted.Narration = NarrationPool->PickRandom(TEXT("fallback"));
 
     FDMAction IdleAction;
     IdleAction.Action = TEXT("idle");
@@ -269,6 +547,13 @@ void UDMBrainSubsystem::OnOllamaCompletion(bool bSuccess, const FString& Respons
         return;
     }
 
+    if (!ResponseParser)
+    {
+        UE_LOG(LogDMBrainSubsystem, Error, TEXT("ResponseParser is null in OnOllamaCompletion."));
+        SetProcessingState(false);
+        return;
+    }
+
     const FDMResponse Parsed = ResponseParser->ParseResponse(ResponseText);
     if (!Parsed.bValid)
     {
@@ -278,12 +563,15 @@ void UDMBrainSubsystem::OnOllamaCompletion(bool bSuccess, const FString& Respons
         return;
     }
 
-    FDMExchange Exchange;
-    Exchange.PlayerInput = OriginalPlayerInput;
-    Exchange.DMResponseSummary = Parsed.Narration.Left(250);
-    Exchange.SceneID = TEXT("tavern_arrival");
-    Exchange.TimestampUtc = FDateTime::UtcNow();
-    ConversationHistory->AddExchange(Exchange);
+    if (ConversationHistory)
+    {
+        FDMExchange Exchange;
+        Exchange.PlayerInput = OriginalPlayerInput;
+        Exchange.DMResponseSummary = Parsed.Narration.Left(250);
+        Exchange.SceneID = TEXT("tavern_arrival");
+        Exchange.TimestampUtc = FDateTime::UtcNow();
+        ConversationHistory->AddExchange(Exchange);
+    }
 
     ResolveParsedResponse(Parsed);
     SetProcessingState(false);
@@ -298,6 +586,9 @@ EGCSkill UDMBrainSubsystem::ResolveCheckSkill(const FString& CheckType) const
     if (Lower.Contains(TEXT("stealth"))) return EGCSkill::Stealth;
     if (Lower.Contains(TEXT("arcana"))) return EGCSkill::Arcana;
     if (Lower.Contains(TEXT("intimidation"))) return EGCSkill::Intimidation;
+    if (Lower.Contains(TEXT("sleight_of_hand")) || Lower.Contains(TEXT("sleight of hand"))) return EGCSkill::SleightOfHand;
+    if (Lower.Contains(TEXT("investigation"))) return EGCSkill::Investigation;
+    if (Lower.Contains(TEXT("insight"))) return EGCSkill::Insight;
     return EGCSkill::Athletics;
 }
 

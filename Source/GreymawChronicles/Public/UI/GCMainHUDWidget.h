@@ -8,6 +8,7 @@ class UDMTextPanelWidget;
 class UGCPlayerInputWidget;
 class UGCHUDOverlayWidget;
 class UGCDebugOverlayWidget;
+class UGCActionFeedbackWidget;
 class UDMBrainSubsystem;
 
 UCLASS()
@@ -29,6 +30,9 @@ protected:
 
     UPROPERTY(meta = (BindWidgetOptional))
     TObjectPtr<UGCDebugOverlayWidget> DebugOverlay;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UGCActionFeedbackWidget> ActionFeedback;
 
 private:
     UFUNCTION()
