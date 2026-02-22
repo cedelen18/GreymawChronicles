@@ -7,6 +7,7 @@
 class UDMTextPanelWidget;
 class UGCPlayerInputWidget;
 class UGCHUDOverlayWidget;
+class UGCDebugOverlayWidget;
 class UDMBrainSubsystem;
 
 UCLASS()
@@ -25,6 +26,9 @@ protected:
 
     UPROPERTY(meta = (BindWidgetOptional))
     TObjectPtr<UGCHUDOverlayWidget> HUDOverlay;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UGCDebugOverlayWidget> DebugOverlay;
 
 private:
     UFUNCTION()

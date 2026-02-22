@@ -2,6 +2,7 @@
 
 #include "DungeonMaster/DMBrainSubsystem.h"
 #include "UI/DMTextPanelWidget.h"
+#include "UI/GCDebugOverlayWidget.h"
 #include "UI/GCHUDOverlayWidget.h"
 #include "UI/GCPlayerInputWidget.h"
 
@@ -45,11 +46,19 @@ void UGCMainHUDWidget::EnsureFallbackWidgets()
     HUDOverlay = WidgetTree->ConstructWidget<UGCHUDOverlayWidget>(UGCHUDOverlayWidget::StaticClass(), TEXT("HUDOverlay"));
     DMTextPanel = WidgetTree->ConstructWidget<UDMTextPanelWidget>(UDMTextPanelWidget::StaticClass(), TEXT("DMTextPanel"));
     PlayerInput = WidgetTree->ConstructWidget<UGCPlayerInputWidget>(UGCPlayerInputWidget::StaticClass(), TEXT("PlayerInput"));
+    DebugOverlay = WidgetTree->ConstructWidget<UGCDebugOverlayWidget>(UGCDebugOverlayWidget::StaticClass(), TEXT("DebugOverlay"));
 
     if (UCanvasPanelSlot* OverlaySlot = Root->AddChildToCanvas(HUDOverlay))
     {
         OverlaySlot->SetAutoSize(true);
         OverlaySlot->SetPosition(FVector2D(20.0f, 20.0f));
+    }
+
+    // Debug overlay — top-right corner
+    if (UCanvasPanelSlot* DebugSlot = Root->AddChildToCanvas(DebugOverlay))
+    {
+        DebugSlot->SetAutoSize(true);
+        DebugSlot->SetPosition(FVector2D(800.0f, 20.0f));
     }
 
     if (UCanvasPanelSlot* DMPanelSlot = Root->AddChildToCanvas(DMTextPanel))

@@ -47,7 +47,7 @@ void UActionDirectorSubsystem::BeginNextAction()
     if (UWorld* World = GetWorld())
     {
         CameraSubsystem = World->GetSubsystem<UCinematicCameraSubsystem>();
-        if (CameraSubsystem)
+        if (CameraSubsystem && Actor)
         {
             const FString Lower = Action.Action.ToLower();
             const EGreymawCameraMode CameraMode = Lower.Contains(TEXT("combat")) ? EGreymawCameraMode::Combat
@@ -82,8 +82,9 @@ void UActionDirectorSubsystem::BeginNextAction()
 
 void UActionDirectorSubsystem::BeginMoveAction(AActor* Actor, const FDMAction& Action)
 {
-    if (!GetWorld())
+    if (!GetWorld() || !Actor)
     {
+        UE_LOG(LogActionDirector, Warning, TEXT("BeginMoveAction skipped: %s."), !Actor ? TEXT("null actor") : TEXT("no world"));
         CompleteCurrentAction();
         return;
     }

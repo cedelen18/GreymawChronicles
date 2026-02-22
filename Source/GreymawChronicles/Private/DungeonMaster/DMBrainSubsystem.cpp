@@ -96,29 +96,56 @@ bool UDMBrainSubsystem::TryHandleScriptedTavernPrompt(const FString& PlayerInput
     Scripted.bValid = true;
 
     const FString Lower = PlayerInput.ToLower();
-    if (Lower.Contains(TEXT("look around")) || Lower.Contains(TEXT("where am i")))
+
+    // --- LOOK AROUND ---
+    if (Lower.Contains(TEXT("look around")) || Lower.Contains(TEXT("where am i")) || Lower.Contains(TEXT("examine room")))
     {
-        Scripted.Narration = TEXT("Warm lamplight spills across the Thornhaven taproom. Marta polishes a mug behind the bar, Kael leans against a post watching the room, and old Durgan mutters into his ale as rain taps the windows.");
+        Scripted.Narration = TEXT("Warm lamplight spills across the Thornhaven taproom. Marta polishes a mug behind the bar, Kael leans against a post watching the room, and old Durgan mutters into his ale as rain taps the windows. A hearth crackles in the corner and a faded quest board hangs by the door.");
+
+        FDMAction LookAction;
+        LookAction.Action = TEXT("idle");
+        LookAction.Actor = TEXT("player");
+        LookAction.DelaySeconds = 1.0f;
+        Scripted.Actions.Add(LookAction);
+
         ResolveParsedResponse(Scripted);
         return true;
     }
 
-    if (Lower.Contains(TEXT("talk to marta")) || Lower.Contains(TEXT("marta")))
+    // --- TALK TO MARTA ---
+    if (Lower.Contains(TEXT("talk to marta")) || Lower.Contains(TEXT("speak to marta")) || Lower.Contains(TEXT("ask marta")))
     {
-        Scripted.Narration = TEXT("Marta lowers her voice. 'Three villagers vanished near the Greymaw trail. If you're heading that way, I'll pay for news of what happened.'");
-        FDMAction Action;
-        Action.Action = TEXT("talk_gesture");
-        Action.Actor = TEXT("marta");
-        Action.Target = TEXT("player");
-        Action.DelaySeconds = 0.6f;
-        Scripted.Actions.Add(Action);
+        Scripted.Narration = TEXT("Marta lowers her voice. 'Three villagers vanished near the Greymaw trail last week. The guard won't go, says it's bad luck. If you're heading that way, I'll pay fifty gold for news of what happened to them.'");
+
+        FDMAction MoveToBar;
+        MoveToBar.Action = TEXT("move");
+        MoveToBar.Actor = TEXT("player");
+        MoveToBar.bHasMoveTarget = true;
+        MoveToBar.MoveTarget = FVector(320.0f, 0.0f, 100.0f);
+        MoveToBar.MoveSpeedUnitsPerSecond = 200.0f;
+        Scripted.Actions.Add(MoveToBar);
+
+        FDMAction TalkAction;
+        TalkAction.Action = TEXT("talk_gesture");
+        TalkAction.Actor = TEXT("marta");
+        TalkAction.Target = TEXT("player");
+        TalkAction.DelaySeconds = 0.6f;
+        Scripted.Actions.Add(TalkAction);
+
+        FDMAction NodAction;
+        NodAction.Action = TEXT("nod");
+        NodAction.Actor = TEXT("marta");
+        NodAction.DelaySeconds = 0.4f;
+        Scripted.Actions.Add(NodAction);
+
         ResolveParsedResponse(Scripted);
         return true;
     }
 
-    if (Lower.Contains(TEXT("walk to bar")) || Lower.Contains(TEXT("move to bar")) || Lower.Contains(TEXT("go to bar")))
+    // --- WALK TO BAR ---
+    if (Lower.Contains(TEXT("walk to bar")) || Lower.Contains(TEXT("move to bar")) || Lower.Contains(TEXT("go to bar")) || Lower.Contains(TEXT("approach bar")))
     {
-        Scripted.Narration = TEXT("You cross the taproom floor toward the bar while the room quiets around you.");
+        Scripted.Narration = TEXT("You cross the taproom floor toward the bar. Floorboards creak underfoot and conversations pause as the regulars size you up.");
 
         FDMAction MoveAction;
         MoveAction.Action = TEXT("move");
@@ -134,23 +161,102 @@ bool UDMBrainSubsystem::TryHandleScriptedTavernPrompt(const FString& PlayerInput
         WaitAction.DelaySeconds = 0.75f;
         Scripted.Actions.Add(WaitAction);
 
+        FDMAction IdleAction;
+        IdleAction.Action = TEXT("idle");
+        IdleAction.Actor = TEXT("player");
+        IdleAction.DelaySeconds = 0.5f;
+        Scripted.Actions.Add(IdleAction);
+
         ResolveParsedResponse(Scripted);
         return true;
     }
 
-    if (Lower.Contains(TEXT("arm wrestle kael")) || Lower.Contains(TEXT("wrestle kael")))
+    // --- ARM WRESTLE KAEL (ability check path) ---
+    if (Lower.Contains(TEXT("arm wrestle")) || Lower.Contains(TEXT("wrestle kael")) || Lower.Contains(TEXT("challenge kael")))
     {
-        Scripted.Narration = TEXT("Kael grins and slams his elbow on the table. 'Let's see what you've got.'");
+        Scripted.Narration = TEXT("Kael grins and slams his elbow on the table. 'Let's see what you've got, adventurer.' The taproom cheers as you grip hands.");
         Scripted.Check.bCheckRequired = true;
         Scripted.Check.CheckType = TEXT("athletics");
         Scripted.Check.DC = 14;
-        Scripted.SuccessBranch.Narration = TEXT("With a hard push, you pin Kael's hand to the table. He laughs and claps you on the shoulder in approval.");
-        Scripted.FailureBranch.Narration = TEXT("Kael overpowers you and grins. 'Good effort. Next round's on me.'");
+
+        Scripted.SuccessBranch.Narration = TEXT("With a surge of strength, you slam Kael's hand to the table! The room erupts. Kael laughs and claps you on the shoulder. 'Stronger than you look!'");
+        FDMAction SuccessGesture;
+        SuccessGesture.Action = TEXT("talk_gesture");
+        SuccessGesture.Actor = TEXT("kael");
+        SuccessGesture.Target = TEXT("player");
+        SuccessGesture.DelaySeconds = 0.5f;
+        Scripted.SuccessBranch.Actions.Add(SuccessGesture);
+
+        Scripted.FailureBranch.Narration = TEXT("Kael overpowers you with a grin and pins your arm. 'Good effort! Next round's on me.' He slides a mug your way.");
+        FDMAction FailGesture;
+        FailGesture.Action = TEXT("shake_head");
+        FailGesture.Actor = TEXT("kael");
+        FailGesture.Target = TEXT("player");
+        FailGesture.DelaySeconds = 0.5f;
+        Scripted.FailureBranch.Actions.Add(FailGesture);
+
         ResolveParsedResponse(Scripted);
         return true;
     }
 
-    return false;
+    // --- TALK TO KAEL ---
+    if (Lower.Contains(TEXT("talk to kael")) || Lower.Contains(TEXT("speak to kael")) || Lower.Contains(TEXT("kael")))
+    {
+        Scripted.Narration = TEXT("Kael straightens up. 'I've been keeping an eye on the trail north. Something doesn't feel right — too quiet. If you're going, I'm coming with you.'");
+
+        FDMAction TalkAction;
+        TalkAction.Action = TEXT("talk_gesture");
+        TalkAction.Actor = TEXT("kael");
+        TalkAction.Target = TEXT("player");
+        TalkAction.DelaySeconds = 0.8f;
+        Scripted.Actions.Add(TalkAction);
+
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // --- TALK TO DURGAN ---
+    if (Lower.Contains(TEXT("durgan")) || Lower.Contains(TEXT("old man")))
+    {
+        Scripted.Narration = TEXT("Old Durgan peers at you with rheumy eyes. 'The Greymaw... I saw it once. Decades ago. A mouth in the earth that swallowed the screams.' He turns back to his ale, hands shaking.");
+
+        FDMAction TalkAction;
+        TalkAction.Action = TEXT("talk_gesture");
+        TalkAction.Actor = TEXT("durgan");
+        TalkAction.Target = TEXT("player");
+        TalkAction.DelaySeconds = 1.0f;
+        Scripted.Actions.Add(TalkAction);
+
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // --- EXAMINE QUEST BOARD ---
+    if (Lower.Contains(TEXT("quest board")) || Lower.Contains(TEXT("notice board")) || Lower.Contains(TEXT("board")))
+    {
+        Scripted.Narration = TEXT("The quest board holds a single weathered parchment: 'MISSING — Three villagers last seen on the Greymaw trail. 50 gold reward for information. — Marta, Thornhaven Taproom.'");
+
+        FDMAction LookAction;
+        LookAction.Action = TEXT("idle");
+        LookAction.Actor = TEXT("player");
+        LookAction.DelaySeconds = 1.5f;
+        Scripted.Actions.Add(LookAction);
+
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // --- CATCH-ALL: unrecognized input in scripted mode ---
+    Scripted.Narration = TEXT("You pause, considering your next move. The taproom hums around you — Marta at the bar, Kael by the post, Durgan in his corner, and a quest board by the door.");
+
+    FDMAction IdleAction;
+    IdleAction.Action = TEXT("idle");
+    IdleAction.Actor = TEXT("player");
+    IdleAction.DelaySeconds = 0.5f;
+    Scripted.Actions.Add(IdleAction);
+
+    ResolveParsedResponse(Scripted);
+    return true;
 }
 
 void UDMBrainSubsystem::OnOllamaCompletion(bool bSuccess, const FString& ResponseText, float LatencySeconds, FString OriginalPlayerInput)
