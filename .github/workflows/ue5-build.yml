@@ -16,13 +16,13 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  UE_ROOT: 'YOUR_UE_PATH'  # e.g. C:\Program Files\Epic Games\UE_5.7
+  UE_ROOT: 'C:\Program Files\Epic Games\UE_5.7'
   PROJECT_FILE: '${{ github.workspace }}\GreymawChronicles.uproject'
 
 jobs:
   build-and-test:
     name: Compile & Smoke Test (Win64 Development)
-    runs-on: [self-hosted, YOUR_RUNNER_LABEL]
+    runs-on: [self-hosted, windows, x64, chris-ai]
     timeout-minutes: 60
 
     steps:
