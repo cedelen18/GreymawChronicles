@@ -32,14 +32,14 @@ jobs:
           lfs: true
           clean: true
 
-      - name: Compile UE5 project
+      - name: Compile UE5 Editor target
         id: compile
         shell: cmd
         timeout-minutes: 45
         run: |
-          echo === UE5 Build Start ===
+          echo === UE5 Build Start (Editor target) ===
           call "%UE_ROOT%\Engine\Build\BatchFiles\Build.bat" ^
-            GreymawChronicles Win64 Development ^
+            GreymawChroniclesEditor Win64 Development ^
             -Project="%PROJECT_FILE%" ^
             -WaitMutex -FromMsBuild ^
             -Log="%GITHUB_WORKSPACE%\Saved\Logs\Build.log"
@@ -47,7 +47,7 @@ jobs:
             echo ::error::UE5 compilation failed
             exit /b 1
           )
-          echo === UE5 Build Succeeded ===
+          echo === UE5 Build Succeeded (Editor target) ===
 
       - name: Run automation tests (NullRHI headless)
         id: tests
