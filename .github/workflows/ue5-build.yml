@@ -58,15 +58,30 @@ jobs:
           echo === Automation Tests Start ===
           "%UE_ROOT%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" ^
             "%PROJECT_FILE%" ^
-            -ExecCmds="Automation RunTests Greymaw" ^
+            -ExecCmds="Automation RunTests Greymaw;Quit" ^
+            -TestExit="Automation Test Queue Empty" ^
             -Unattended -NullRHI ^
             -Log="%GITHUB_WORKSPACE%\Saved\Logs\Tests.log" ^
             -ReportExportPath="%GITHUB_WORKSPACE%\Saved\Automation"
-          if errorlevel 1 (
-            echo ::error::One or more automation tests failed
+          set TEST_EXIT=%ERRORLEVEL%
+          echo === Test process exited with code %TEST_EXIT% ===
+          if %TEST_EXIT% neq 0 (
+            echo ::error::One or more automation tests failed (exit code %TEST_EXIT%)
             exit /b 1
           )
           echo === Automation Tests Passed ===
+
+      - name: Print test log tail on failure
+        if: failure() && steps.tests.outcome == 'failure'
+        shell: cmd
+        run: |
+          echo === Last 80 lines of Tests.log ===
+          if exist "%GITHUB_WORKSPACE%\Saved\Logs\Tests.log" (
+            powershell -Command "Get-Content '%GITHUB_WORKSPACE%\Saved\Logs\Tests.log' -Tail 80"
+          ) else (
+            echo Tests.log not found at expected path.
+            dir /s /b "%GITHUB_WORKSPACE%\Saved\Logs\*.log" 2>nul || echo No log files found.
+          )
 
       - name: Upload build and test logs
         if: always()
