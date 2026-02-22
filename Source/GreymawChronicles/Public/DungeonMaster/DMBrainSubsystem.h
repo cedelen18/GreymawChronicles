@@ -18,6 +18,7 @@ class UGCCharacterSheet;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMNarration, const FString&, Narration);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMActionsReady, const TArray<FDMAction>&, Actions);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMDiceResolved, const FAbilityCheckResult&, Result);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMProcessingStateChanged, bool, bIsProcessing);
 
 UCLASS()
 class GREYMAWCHRONICLES_API UDMBrainSubsystem : public UGameInstanceSubsystem
@@ -36,6 +37,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "DM")
     void ResolveParsedResponse(const FDMResponse& Parsed);
 
+    UFUNCTION(BlueprintPure, Category = "DM")
+    bool IsProcessing() const { return bIsProcessing; }
+
     UPROPERTY(BlueprintAssignable, Category = "DM")
     FOnDMNarration OnDMNarration;
 
@@ -45,10 +49,15 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "DM")
     FOnDMDiceResolved OnDMDiceResolved;
 
+    UPROPERTY(BlueprintAssignable, Category = "DM")
+    FOnDMProcessingStateChanged OnDMProcessingStateChanged;
+
 private:
     void OnOllamaCompletion(bool bSuccess, const FString& ResponseText, float LatencySeconds, FString OriginalPlayerInput);
     void ApplyWorldChanges(const TArray<FDMWorldChange>& WorldChanges);
     EGCSkill ResolveCheckSkill(const FString& CheckType) const;
+    bool TryHandleScriptedTavernPrompt(const FString& PlayerInput);
+    void SetProcessingState(bool bNewState);
 
     UPROPERTY()
     TObjectPtr<UDMPromptBuilder> PromptBuilder;
@@ -76,4 +85,10 @@ private:
 
     UPROPERTY()
     TObjectPtr<UGCCharacterSheet> PlayerSheet;
+
+    UPROPERTY(EditAnywhere, Category = "DM|Demo")
+    bool bUseTavernScriptedBootstrap = true;
+
+    UPROPERTY()
+    bool bIsProcessing = false;
 };

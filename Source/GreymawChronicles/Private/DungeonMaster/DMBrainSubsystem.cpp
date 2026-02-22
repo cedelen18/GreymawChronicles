@@ -18,7 +18,7 @@ void UDMBrainSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     PromptBuilder = NewObject<UDMPromptBuilder>(this);
     ResponseParser = NewObject<UDMResponseParser>(this);
     ConversationHistory = NewObject<UDMConversationHistory>(this);
-    OllamaSubsystem = GetGameInstance()->GetSubsystem<UOllamaSubsystem>();
+    OllamaSubsystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UOllamaSubsystem>() : nullptr;
 
     DiceRoller = NewObject<UDiceRoller>(this);
     AbilityCheckResolver = NewObject<UAbilityCheckResolver>(this);
@@ -34,28 +34,100 @@ void UDMBrainSubsystem::SetRuleContext(UGCCharacterSheet* InPlayerSheet)
     PlayerSheet = InPlayerSheet;
 }
 
+void UDMBrainSubsystem::SetProcessingState(bool bNewState)
+{
+    if (bIsProcessing == bNewState)
+    {
+        return;
+    }
+
+    bIsProcessing = bNewState;
+    OnDMProcessingStateChanged.Broadcast(bIsProcessing);
+}
+
 void UDMBrainSubsystem::ProcessPlayerInput(const FString& PlayerInput)
 {
+    if (bIsProcessing)
+    {
+        return;
+    }
+
+    const FString SanitizedInput = PlayerInput.TrimStartAndEnd();
+    if (SanitizedInput.IsEmpty())
+    {
+        return;
+    }
+
+    SetProcessingState(true);
+
+    if (bUseTavernScriptedBootstrap && TryHandleScriptedTavernPrompt(SanitizedInput))
+    {
+        SetProcessingState(false);
+        return;
+    }
+
     if (!OllamaSubsystem || !PromptBuilder || !ResponseParser || !ConversationHistory)
     {
         UE_LOG(LogDMBrainSubsystem, Error, TEXT("DM Brain dependencies are missing."));
+        OnDMNarration.Broadcast(TEXT("The DM is not ready yet. Please try again in a moment."));
+        SetProcessingState(false);
         return;
     }
 
     FDMPromptContext Context;
-    Context.SceneContext = TEXT("scene_id=tavern_arrival");
+    Context.SceneContext = TEXT("scene_id=tavern_arrival; location=thornhaven_taproom; npcs=[marta,kael,durgan]");
     Context.CharacterSheets = TEXT("{}");
-    Context.AdventureState = TEXT("{}");
+    Context.AdventureState = TEXT("{\"quest_stage\":\"tavern_arrival\",\"time\":\"evening\"}");
     Context.ConversationHistory = ConversationHistory->ToPromptString();
 
-    const FString Prompt = PromptBuilder->BuildDMPrompt(PlayerInput, Context);
+    const FString Prompt = PromptBuilder->BuildDMPrompt(SanitizedInput, Context);
 
     FOllamaRequestOptions Options;
     Options.Priority = EOllamaRequestPriority::High;
     Options.Temperature = 0.7f;
 
     OllamaSubsystem->SendGenerateRequest(TEXT("qwen2.5:32b"), Prompt, Options,
-        FOnOllamaComplete::CreateUObject(this, &UDMBrainSubsystem::OnOllamaCompletion, PlayerInput));
+        FOnOllamaComplete::CreateUObject(this, &UDMBrainSubsystem::OnOllamaCompletion, SanitizedInput));
+}
+
+bool UDMBrainSubsystem::TryHandleScriptedTavernPrompt(const FString& PlayerInput)
+{
+    FDMResponse Scripted;
+    Scripted.bValid = true;
+
+    const FString Lower = PlayerInput.ToLower();
+    if (Lower.Contains(TEXT("look around")) || Lower.Contains(TEXT("where am i")))
+    {
+        Scripted.Narration = TEXT("Warm lamplight spills across the Thornhaven taproom. Marta polishes a mug behind the bar, Kael leans against a post watching the room, and old Durgan mutters into his ale as rain taps the windows.");
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    if (Lower.Contains(TEXT("talk to marta")) || Lower.Contains(TEXT("marta")))
+    {
+        Scripted.Narration = TEXT("Marta lowers her voice. 'Three villagers vanished near the Greymaw trail. If you're heading that way, I'll pay for news of what happened.'");
+        FDMAction Action;
+        Action.Action = TEXT("talk_gesture");
+        Action.Actor = TEXT("marta");
+        Action.Target = TEXT("player");
+        Scripted.Actions.Add(Action);
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    if (Lower.Contains(TEXT("arm wrestle kael")) || Lower.Contains(TEXT("wrestle kael")))
+    {
+        Scripted.Narration = TEXT("Kael grins and slams his elbow on the table. 'Let's see what you've got.'");
+        Scripted.Check.bCheckRequired = true;
+        Scripted.Check.CheckType = TEXT("athletics");
+        Scripted.Check.DC = 14;
+        Scripted.SuccessBranch.Narration = TEXT("With a hard push, you pin Kael's hand to the table. He laughs and claps you on the shoulder in approval.");
+        Scripted.FailureBranch.Narration = TEXT("Kael overpowers you and grins. 'Good effort. Next round's on me.'");
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    return false;
 }
 
 void UDMBrainSubsystem::OnOllamaCompletion(bool bSuccess, const FString& ResponseText, float LatencySeconds, FString OriginalPlayerInput)
@@ -64,6 +136,7 @@ void UDMBrainSubsystem::OnOllamaCompletion(bool bSuccess, const FString& Respons
     {
         UE_LOG(LogDMBrainSubsystem, Warning, TEXT("DM request failed in %.2fs: %s"), LatencySeconds, *ResponseText);
         OnDMNarration.Broadcast(TEXT("The DM falters for a moment. Please try again."));
+        SetProcessingState(false);
         return;
     }
 
@@ -72,6 +145,7 @@ void UDMBrainSubsystem::OnOllamaCompletion(bool bSuccess, const FString& Respons
     {
         UE_LOG(LogDMBrainSubsystem, Warning, TEXT("DM parse failure: %s"), *Parsed.Error);
         OnDMNarration.Broadcast(TEXT("I couldn't interpret that response cleanly. Try rephrasing your action."));
+        SetProcessingState(false);
         return;
     }
 
@@ -83,6 +157,7 @@ void UDMBrainSubsystem::OnOllamaCompletion(bool bSuccess, const FString& Respons
     ConversationHistory->AddExchange(Exchange);
 
     ResolveParsedResponse(Parsed);
+    SetProcessingState(false);
 }
 
 EGCSkill UDMBrainSubsystem::ResolveCheckSkill(const FString& CheckType) const

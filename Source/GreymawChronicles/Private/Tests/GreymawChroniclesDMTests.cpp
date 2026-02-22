@@ -10,6 +10,8 @@
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDMConversationHistoryCapacityTest, "GreymawChronicles.DM.ConversationHistoryCapacity", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDMResponseParserRepairTest, "GreymawChronicles.DM.ResponseParserRepair", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDMBrainCheckRequiredIntegrationTest, "GreymawChronicles.DM.CheckRequired.Integration", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDMBrainScriptedTurnLoopStateTest, "GreymawChronicles.DM.TurnLoop.ScriptedPromptState", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDMBrainFallbackRestoresInputStateTest, "GreymawChronicles.DM.TurnLoop.FallbackRestoresInput", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FDMConversationHistoryCapacityTest::RunTest(const FString& Parameters)
 {
@@ -67,6 +69,28 @@ bool FDMBrainCheckRequiredIntegrationTest::RunTest(const FString& Parameters)
     Brain->ResolveParsedResponse(Parsed);
 
     TestEqual(TEXT("Failure path should apply damage world change"), Player->CurrentHP, 16);
+    return true;
+}
+
+bool FDMBrainScriptedTurnLoopStateTest::RunTest(const FString& Parameters)
+{
+    UDMBrainSubsystem* Brain = NewObject<UDMBrainSubsystem>();
+    TestFalse(TEXT("Precondition: brain should start idle"), Brain->IsProcessing());
+
+    Brain->ProcessPlayerInput(TEXT("I look around the tavern"));
+
+    TestFalse(TEXT("Scripted tavern prompt should complete in same tick and restore input"), Brain->IsProcessing());
+    return true;
+}
+
+bool FDMBrainFallbackRestoresInputStateTest::RunTest(const FString& Parameters)
+{
+    UDMBrainSubsystem* Brain = NewObject<UDMBrainSubsystem>();
+    TestFalse(TEXT("Precondition: brain should start idle"), Brain->IsProcessing());
+
+    Brain->ProcessPlayerInput(TEXT("Completely unscripted prompt while dependencies are unavailable"));
+
+    TestFalse(TEXT("Fallback path should always restore input/processing state"), Brain->IsProcessing());
     return true;
 }
 
