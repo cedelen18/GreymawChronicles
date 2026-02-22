@@ -66,10 +66,7 @@ bool FSetupConfigDefaultsTest::RunTest(const FString& Parameters)
  * Uses direct filesystem check instead of FPackageName::DoesPackageExist
  * because the asset registry is not populated in NullRHI headless mode.
  *
- * NOTE: This emits a warning (not a failure) if the map is missing,
- * because the asset may not exist yet during early development.
- * Once the map is committed to the repo, change AddWarning → TestTrue
- * to enforce its presence in CI.
+ * Enforces that the map file is present — fails CI if missing.
  */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FSetupMapExistsTest,
@@ -87,17 +84,10 @@ bool FSetupMapExistsTest::RunTest(const FString& Parameters)
     );
 
     const bool bExists = IFileManager::Get().FileExists(*MapAssetPath);
-    if (!bExists)
-    {
-        AddWarning(FString::Printf(
-            TEXT("Map file not found at: %s — create L_Persistent in Content/Maps/ to satisfy this check"),
-            *MapAssetPath
-        ));
-    }
-    else
-    {
-        AddInfo(FString::Printf(TEXT("Map file verified at: %s"), *MapAssetPath));
-    }
+    TestTrue(
+        FString::Printf(TEXT("Map file should exist at: %s"), *MapAssetPath),
+        bExists
+    );
 
     return true;
 }

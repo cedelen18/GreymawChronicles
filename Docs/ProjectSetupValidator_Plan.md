@@ -8,7 +8,7 @@ after merges or fresh clones).
 
 | # | Check | Method | Severity |
 |---|-------|--------|----------|
-| 1 | `/Game/Maps/L_Persistent` exists | Filesystem check (`IFileManager`) | Warning* |
+| 1 | `/Game/Maps/L_Persistent` exists | Filesystem check (`IFileManager`) | Fatal |
 | 2 | `PlayerStart` actor present in L_Persistent | World iteration / `TActorIterator` | Fatal |
 | 3 | `GCTavernLevelBootstrap` actor present | World iteration / `TActorIterator` | Fatal |
 | 4 | `GameDefaultMap` set to L_Persistent | `UGameMapsSettings` | Warning |
@@ -21,9 +21,8 @@ after merges or fresh clones).
   automation test. Runs in headless NullRHI CI.
 - **Check 1 (map exists)**: Implemented as `GreymawChronicles.Setup.MapPackageExists`.
   Uses direct filesystem check via `IFileManager::Get().FileExists()` because the asset
-  registry is not populated in NullRHI headless mode. Currently emits a **warning** (not
-  a failure) because the `L_Persistent.umap` asset has not been committed to the repo yet.
-  Change to `TestTrue` once the map file is present.
+  registry is not populated in NullRHI headless mode. Hard failure (`TestTrue`) — the
+  `L_Persistent.umap` asset is now committed to the repo.
 - **Checks 2-3 (actor validation)**: Require a loaded world with actors. These cannot
   run reliably in NullRHI headless mode without a full map load. Planned as an
   Editor Utility Widget (Blutility) or PIE-mode validation step.
