@@ -1,0 +1,9 @@
+FROM qwen2.5:32b
+PARAMETER temperature 0.7
+PARAMETER top_p 0.9
+PARAMETER num_predict 1024
+PARAMETER num_ctx 8192
+PARAMETER stop "```"
+PARAMETER stop "Player:"
+PARAMETER stop "USER:"
+PARAMETER stop "SYSTEM:"
