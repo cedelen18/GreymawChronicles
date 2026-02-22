@@ -1,0 +1,120 @@
+# Repository Hygiene — Hosted ubuntu runner
+# Lightweight checks: file validation, header lint, docs freshness, .gitignore audit
+
+name: Repository Hygiene
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  hygiene:
+    name: Lint & Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for docs freshness check
+
+      - name: Validate required files exist
+        run: |
+          echo "=== Checking required project files ==="
+          MISSING=0
+          for f in \
+            "GreymawChronicles.uproject" \
+            ".gitignore" \
+            ".gitattributes" \
+            "README.md" \
+            "Source/GreymawChronicles/GreymawChronicles.Build.cs" \
+            "Source/GreymawChronicles.Target.cs" \
+            "Source/GreymawChroniclesEditor.Target.cs" \
+            "Config/DefaultEngine.ini"; do
+            if [ ! -f "$f" ]; then
+              echo "::error file=$f::MISSING required file: $f"
+              MISSING=1
+            else
+              echo "  OK: $f"
+            fi
+          done
+          if [ "$MISSING" -eq 1 ]; then
+            exit 1
+          fi
+          echo "All required files present."
+
+      - name: Lint C++ headers for pragma once
+        run: |
+          echo "=== Checking #pragma once in .h files ==="
+          FAIL=0
+          COUNT=0
+          while IFS= read -r -d '' hdr; do
+            COUNT=$((COUNT + 1))
+            if ! head -5 "$hdr" | grep -q '#pragma once'; then
+              echo "::error file=$hdr::Missing #pragma once in first 5 lines"
+              FAIL=1
+            fi
+          done < <(find Source/ -name '*.h' -print0)
+          echo "Checked $COUNT header files."
+          if [ "$FAIL" -eq 1 ]; then
+            exit 1
+          fi
+          echo "All headers have #pragma once."
+
+      - name: Check docs freshness
+        run: |
+          echo "=== Checking documentation freshness ==="
+          STALE_DAYS=180
+          NOW=$(date +%s)
+          STALE=0
+          for doc in Docs/*.md; do
+            if [ -f "$doc" ]; then
+              LAST_COMMIT=$(git log -1 --format="%ct" -- "$doc" 2>/dev/null || echo "0")
+              if [ "$LAST_COMMIT" -eq "0" ]; then
+                echo "::warning file=$doc::Not yet committed"
+              else
+                AGE=$(( (NOW - LAST_COMMIT) / 86400 ))
+                if [ "$AGE" -gt "$STALE_DAYS" ]; then
+                  echo "::warning file=$doc::Last updated $AGE days ago (threshold: ${STALE_DAYS}d)"
+                  STALE=1
+                else
+                  echo "  OK: $doc ($AGE days old)"
+                fi
+              fi
+            fi
+          done
+          if [ "$STALE" -eq 1 ]; then
+            echo "::notice::Some docs are stale. Consider updating them."
+          fi
+
+      - name: Validate .gitignore completeness
+        run: |
+          echo "=== Checking .gitignore for required patterns ==="
+          MISSING=0
+          REQUIRED=(
+            "Binaries/"
+            "DerivedDataCache/"
+            "Intermediate/"
+            "Saved/"
+            "Build/"
+            ".vs/"
+            ".idea/"
+            "*.log"
+            "*.dmp"
+            "__pycache__/"
+          )
+          for pattern in "${REQUIRED[@]}"; do
+            if ! grep -qF "$pattern" .gitignore; then
+              echo "::error::.gitignore missing required pattern: $pattern"
+              MISSING=1
+            else
+              echo "  OK: $pattern"
+            fi
+          done
+          if [ "$MISSING" -eq 1 ]; then
+            exit 1
+          fi
+          echo "All required .gitignore patterns present."

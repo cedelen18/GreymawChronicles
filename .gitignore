@@ -22,3 +22,29 @@ Thumbs.db
 # Compiled
 *.pch
 *.ipch
+
+# IDE (additional)
+.idea/
+
+# Debug symbols and crash data
+*.dmp
+*.pdb
+*.dwarf
+crash-reports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+Logs/
+
+# CI/CD
+.github/runner/
+
+# Misc
+*.bak
+*.swp
+*~

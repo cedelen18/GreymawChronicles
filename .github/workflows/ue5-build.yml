@@ -1,0 +1,80 @@
+# UE5 Build & Test — Self-hosted Windows runner
+# Requires: UE 5.7 installed, VS Build Tools, Git LFS
+# Setup: Replace YOUR_RUNNER_LABEL and YOUR_UE_PATH before first run
+
+name: UE5 Build & Test
+
+on:
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *'  # Nightly at 04:00 UTC
+
+concurrency:
+  group: ue5-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UE_ROOT: 'YOUR_UE_PATH'  # e.g. C:\Program Files\Epic Games\UE_5.7
+  PROJECT_FILE: '${{ github.workspace }}\GreymawChronicles.uproject'
+
+jobs:
+  build-and-test:
+    name: Compile & Smoke Test (Win64 Development)
+    runs-on: [self-hosted, YOUR_RUNNER_LABEL]
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          clean: true
+
+      - name: Compile UE5 project
+        id: compile
+        shell: cmd
+        timeout-minutes: 45
+        run: |
+          echo === UE5 Build Start ===
+          call "%UE_ROOT%\Engine\Build\BatchFiles\Build.bat" ^
+            GreymawChronicles Win64 Development ^
+            -Project="%PROJECT_FILE%" ^
+            -WaitMutex -FromMsBuild ^
+            -Log="%GITHUB_WORKSPACE%\Saved\Logs\Build.log"
+          if errorlevel 1 (
+            echo ::error::UE5 compilation failed
+            exit /b 1
+          )
+          echo === UE5 Build Succeeded ===
+
+      - name: Run automation tests (NullRHI headless)
+        id: tests
+        if: steps.compile.outcome == 'success'
+        shell: cmd
+        timeout-minutes: 10
+        run: |
+          echo === Automation Tests Start ===
+          "%UE_ROOT%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" ^
+            "%PROJECT_FILE%" ^
+            -ExecCmds="Automation RunTests Greymaw" ^
+            -Unattended -NullRHI ^
+            -Log="%GITHUB_WORKSPACE%\Saved\Logs\Tests.log" ^
+            -ReportExportPath="%GITHUB_WORKSPACE%\Saved\Automation"
+          if errorlevel 1 (
+            echo ::error::One or more automation tests failed
+            exit /b 1
+          )
+          echo === Automation Tests Passed ===
+
+      - name: Upload build and test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ github.run_id }}
+          path: |
+            Saved/Logs/*.log
+            Saved/Automation/**
+          retention-days: 14
+          if-no-files-found: warn
