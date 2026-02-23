@@ -85,6 +85,18 @@ TArray<UDMIntentClassifier::FIntentRule> UDMIntentClassifier::BuildRules()
         TEXT("play cards")
     }, 0.90f });
 
+    // Sprint K: Accept / Agree / Volunteer
+    Rules.Add({ EDMIntent::Accept, {
+        TEXT("accept"), TEXT("agree"), TEXT("take the job"), TEXT("sign up"),
+        TEXT("volunteer"), TEXT("take on"), TEXT("take it")
+    }, 0.92f });
+
+    // Sprint K: Report / Inform / Share findings
+    Rules.Add({ EDMIntent::Report, {
+        TEXT("report"), TEXT("share findings"), TEXT("inform"),
+        TEXT("reveal"), TEXT("tell what i found"), TEXT("share what i know")
+    }, 0.92f });
+
     return Rules;
 }
 

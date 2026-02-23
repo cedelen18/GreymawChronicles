@@ -53,6 +53,14 @@ public:
     UFUNCTION(BlueprintPure, Category = "DM")
     UDMConversationHistory* GetConversationHistory() const { return ConversationHistory; }
 
+    /** Sprint K: Get the current NPC interaction state (neutral, engaged, helpful, upset). */
+    UFUNCTION(BlueprintPure, Category = "DM")
+    FString GetNPCInteractionState(const FString& NPCName) const;
+
+    /** Sprint K: Transition an NPC to a new interaction state. */
+    UFUNCTION(BlueprintCallable, Category = "DM")
+    void TransitionNPCState(const FString& NPCName, const FString& NewState);
+
     UPROPERTY(BlueprintAssignable, Category = "DM")
     FOnDMNarration OnDMNarration;
 

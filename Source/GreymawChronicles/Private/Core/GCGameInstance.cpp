@@ -36,6 +36,29 @@ void UGCGameInstance::Init()
         LoadGame();
         UE_LOG(LogGCGameInstance, Log, TEXT("Loaded saved game state."));
     }
+
+    // Sprint K: Console commands for manual save/load
+    ManualSaveCmd = MakeUnique<FAutoConsoleCommand>(
+        TEXT("gc.save"),
+        TEXT("Manually save the current game state"),
+        FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
+        {
+            if (SaveGame())
+            {
+                OnSaveLoadFeedback.Broadcast(TEXT("Game saved"));
+            }
+        }));
+
+    ManualLoadCmd = MakeUnique<FAutoConsoleCommand>(
+        TEXT("gc.load"),
+        TEXT("Manually load the last saved game state"),
+        FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
+        {
+            if (LoadGame())
+            {
+                OnSaveLoadFeedback.Broadcast(TEXT("Save loaded"));
+            }
+        }));
 }
 
 UDMBrainSubsystem* UGCGameInstance::GetDMBrainSubsystem() const
@@ -102,6 +125,9 @@ bool UGCGameInstance::SaveGame()
     {
         UE_LOG(LogGCGameInstance, Log, TEXT("Game saved to slot '%s' at %s"),
             *UGreymawSaveGame::SaveSlotName, *SaveData->SaveTimestamp);
+
+        // Sprint K: Feedback for auto-save
+        OnSaveLoadFeedback.Broadcast(TEXT("Autosaved"));
     }
     else
     {
@@ -155,6 +181,10 @@ bool UGCGameInstance::LoadGame()
 
     UE_LOG(LogGCGameInstance, Log, TEXT("Game loaded from slot '%s' (saved at %s)"),
         *UGreymawSaveGame::SaveSlotName, *SaveData->SaveTimestamp);
+
+    // Sprint K: Feedback for auto-load
+    const FString LoadMessage = FString::Printf(TEXT("Loaded save from %s"), *SaveData->SaveTimestamp);
+    OnSaveLoadFeedback.Broadcast(LoadMessage);
 
     return true;
 }

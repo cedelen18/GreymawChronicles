@@ -73,6 +73,10 @@ struct FDMOutcomeBranch
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TArray<FDMAction> Actions;
+
+    /** Sprint K: Branch-specific world changes (applied only when this branch is chosen). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FDMWorldChange> WorldChanges;
 };
 
 USTRUCT(BlueprintType)

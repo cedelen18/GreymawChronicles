@@ -240,4 +240,75 @@ void UDMNarrationPool::PopulateTavernDefaults()
         TEXT("The old man's eyes are clearer now. 'You earned my trust, traveler. The Greymaw has a heart -- a stone buried deep. Find it, destroy it, and maybe this ends.'"),
         TEXT("Durgan speaks freely now. 'Forty years I've kept quiet. But you need to know -- the Greymaw trail has a guardian. A thing of root and stone. Be ready.'")
     });
+
+    // ===================================================================
+    // Sprint K: NPC Interaction State — Engaged narration
+    // ===================================================================
+
+    RegisterSlot(TEXT("talk_marta_engaged"), {
+        TEXT("Marta pauses her work. 'Still here? Good. I could use someone with a level head. The disappearances are getting worse.' She dries her hands thoughtfully."),
+        TEXT("'You again.' Marta's tone is businesslike but not unfriendly. 'If you're serious about helping, start by talking to the regulars. They know more than they let on.'"),
+        TEXT("Marta sets down a glass and gives you her full attention. 'Alright, traveler. You've got my ear. What have you learned so far?'")
+    });
+
+    RegisterSlot(TEXT("talk_durgan_engaged"), {
+        TEXT("Durgan looks up as you approach. 'Back for more stories? Most folk leave after the first one.' There's a flicker of something like hope in his eyes."),
+        TEXT("'You're persistent.' Durgan shifts to make room. 'That's either brave or foolish. Sit. I'll tell you what I know -- but you won't like it.'"),
+        TEXT("Durgan nods when he sees you. 'Still interested in the Greymaw, eh? Most people run when I mention the ground breathing. You didn't.' A thin smile.")
+    });
+
+    RegisterSlot(TEXT("talk_kael_engaged"), {
+        TEXT("Kael uncrosses his arms. 'Thought you'd come back. I've been thinking about the trail. There's an old watchtower -- might make a good base camp.'"),
+        TEXT("'Ready to plan?' Kael pulls up a stool. 'I know the northern approach. Two days' march, if the weather holds. But we'll need supplies.'"),
+        TEXT("Kael gives you a measuring look. 'You've got grit, I'll give you that. Let's talk logistics. How many are we, and what gear do we have?'")
+    });
+
+    // --- Talk Kael (friendly / helpful) ---
+    RegisterSlot(TEXT("talk_kael_friendly"), {
+        TEXT("Kael claps you on the shoulder. 'Good to see you, partner. I've been scouting the trail edge. Found tracks -- big ones. We should move soon.'"),
+        TEXT("'There you are.' Kael grins. 'I sharpened my blade and packed extra rope. When you're ready to head out, just say the word.'"),
+        TEXT("Kael waves you over eagerly. 'I asked around the village. Old Mag by the well says she saw lights near the Greymaw entrance last full moon.'")
+    });
+
+    // --- Talk Kael (suspicious / upset) ---
+    RegisterSlot(TEXT("talk_kael_suspicious"), {
+        TEXT("Kael's jaw tightens. 'I heard what you did. Keep your distance. I don't work with people I can't trust.' He turns away."),
+        TEXT("Kael fixes you with a hard stare. 'We're done talking. Whatever scheme you're running, leave me out of it.'"),
+        TEXT("'Don't.' Kael holds up a hand. 'I know what happened. You want my help? Earn it back. Until then, stay on your side of the tavern.'")
+    });
+
+    // --- Talk Durgan (suspicious / upset) ---
+    RegisterSlot(TEXT("talk_durgan_suspicious"), {
+        TEXT("Durgan clutches his tankard protectively. 'Get away from me. I don't trust your kind.' He shuffles his stool away."),
+        TEXT("The old man's eyes go wide with suspicion. 'I saw what you did. Don't think age makes me blind. Leave me be.'"),
+        TEXT("Durgan turns his back. 'I've nothing to say to a thief. The Greymaw can have you for all I care.' His hands tremble with anger.")
+    });
+
+    // ===================================================================
+    // Sprint K: Task Mini-Loop narration
+    // ===================================================================
+
+    RegisterSlot(TEXT("accept_task"), {
+        TEXT("You nod firmly. 'I'll look into the disappearances.' Marta's shoulders drop with relief. 'Thank you. Talk to the regulars, check the board -- anything helps.'"),
+        TEXT("'Count me in.' Marta slides a copper across the bar -- an advance. 'Find out what happened to those people. Start here in the tavern. Someone knows something.'"),
+        TEXT("You accept the task with a steady hand. Marta reaches under the bar and produces a crude map of the trail. 'This is all I have. Be careful out there.'")
+    });
+
+    RegisterSlot(TEXT("report_no_clues"), {
+        TEXT("Marta frowns. 'You haven't found anything yet? Keep looking -- eavesdrop on the patrons, talk to Durgan, check the quest board. Something will turn up.'"),
+        TEXT("'Nothing?' Marta shakes her head. 'The answers are here in this tavern, I'm sure of it. Ask around. Listen carefully. Don't give up.'"),
+        TEXT("Marta crosses her arms. 'I appreciate the effort, but I need information, not empty hands. Keep digging. Someone in here knows something.'")
+    });
+
+    RegisterSlot(TEXT("report_partial"), {
+        TEXT("Marta listens carefully to your single lead. 'It's a start. But I need more before I can act. Keep investigating -- there's more to uncover.'"),
+        TEXT("'Interesting, but not enough.' Marta taps the bar thoughtfully. 'One clue won't save those people. Find more evidence and report back.'"),
+        TEXT("Marta nods slowly. 'That's something, at least. But the trail needs more than one thread to follow. Keep at it, traveler.'")
+    });
+
+    RegisterSlot(TEXT("report_full"), {
+        TEXT("Marta's eyes widen as you lay out your findings. 'This changes everything. The ward-stones, the whispers, the notice -- it all connects.' She pushes a heavy coin pouch toward you. 'You've earned this. We'll send word to the capital at dawn.'"),
+        TEXT("'By the gods.' Marta grips the bar as she takes in your report. 'You've pieced together more in one evening than the watch managed in a week.' She produces a reward pouch. 'Fifty gold, as promised. And my gratitude.'"),
+        TEXT("Marta listens in stunned silence, then exhales. 'So the Greymaw is real. The clues all point the same direction.' She slides your reward across the bar. 'You've done Thornhaven a great service tonight. We won't forget it.'")
+    });
 }

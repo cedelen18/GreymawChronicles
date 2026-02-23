@@ -36,10 +36,10 @@ void UActionDirectorSubsystem::ExecuteDMActions(const TArray<FDMAction>& InActio
         return;
     }
 
-    // Sprint I: Sequence-level safety timeout (15s)
+    // Sprint I/K: Sequence-level safety timeout (12s — tightened from 15s)
     if (UWorld* World = GetWorld())
     {
-        World->GetTimerManager().SetTimer(SequenceTimeoutHandle, this, &UActionDirectorSubsystem::ForceCompleteSequence, 15.0f, false);
+        World->GetTimerManager().SetTimer(SequenceTimeoutHandle, this, &UActionDirectorSubsystem::ForceCompleteSequence, 12.0f, false);
     }
 
     BeginNextAction();
@@ -62,7 +62,7 @@ void UActionDirectorSubsystem::BeginNextAction()
             AActor* PlayerPawn = GetWorld() ? UGameplayStatics::GetPlayerPawn(GetWorld(), 0) : nullptr;
             if (PlayerPawn)
             {
-                CameraSubsystem->SwitchCameraMode(EGreymawCameraMode::Establishing, PlayerPawn, 1.2f);
+                CameraSubsystem->SwitchCameraMode(EGreymawCameraMode::Establishing, PlayerPawn, 1.8f);
             }
             LastCameraMode = EGreymawCameraMode::Establishing;
             LastCameraFocusActor = nullptr;
@@ -78,7 +78,19 @@ void UActionDirectorSubsystem::BeginNextAction()
     if (UWorld* World = GetWorld())
     {
         CameraSubsystem = World->GetSubsystem<UCinematicCameraSubsystem>();
-        if (CameraSubsystem && Actor)
+
+        // Sprint K: Null-safe camera — fall back to player pawn if actor not found
+        AActor* CameraFocus = Actor;
+        if (!CameraFocus)
+        {
+            CameraFocus = UGameplayStatics::GetPlayerPawn(World, 0);
+            if (CameraFocus)
+            {
+                UE_LOG(LogActionDirector, Warning, TEXT("Camera target null for action '%s'; using player pawn."), *Action.Action);
+            }
+        }
+
+        if (CameraSubsystem && CameraFocus)
         {
             const FString Lower = Action.Action.ToLower();
             const EGreymawCameraMode CameraMode = Lower.Contains(TEXT("combat")) ? EGreymawCameraMode::Combat
@@ -93,11 +105,11 @@ void UActionDirectorSubsystem::BeginNextAction()
                 : 0.5f; // Combat
 
             // Sprint I: Skip redundant camera switches (same mode + same focus actor)
-            if (CameraMode != LastCameraMode || Actor != LastCameraFocusActor)
+            if (CameraMode != LastCameraMode || CameraFocus != LastCameraFocusActor)
             {
-                CameraSubsystem->SwitchCameraMode(CameraMode, Actor, BlendTime);
+                CameraSubsystem->SwitchCameraMode(CameraMode, CameraFocus, BlendTime);
                 LastCameraMode = CameraMode;
-                LastCameraFocusActor = Actor;
+                LastCameraFocusActor = CameraFocus;
             }
         }
     }

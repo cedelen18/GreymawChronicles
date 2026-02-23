@@ -151,6 +151,22 @@ void UDMBrainSubsystem::ProcessPlayerInput(const FString& PlayerInput)
         FOnOllamaComplete::CreateUObject(this, &UDMBrainSubsystem::OnOllamaCompletion, SanitizedInput));
 }
 
+FString UDMBrainSubsystem::GetNPCInteractionState(const FString& NPCName) const
+{
+    if (!WorldState) return TEXT("neutral");
+    const FString State = WorldState->GetState(TEXT("npc_interaction_state"), NPCName);
+    return State.IsEmpty() ? TEXT("neutral") : State;
+}
+
+void UDMBrainSubsystem::TransitionNPCState(const FString& NPCName, const FString& NewState)
+{
+    if (WorldState)
+    {
+        WorldState->SetState(TEXT("npc_interaction_state"), NPCName, NewState);
+        UE_LOG(LogDMBrainSubsystem, Log, TEXT("NPC state transition: %s -> %s"), *NPCName, *NewState);
+    }
+}
+
 bool UDMBrainSubsystem::TryHandleScriptedTavernPrompt(const FString& PlayerInput)
 {
     if (!IntentClassifier || !NarrationPool)
@@ -207,23 +223,42 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
     {
         if (Subject.Contains(TEXT("marta")))
         {
-            // Sprint I: Disposition-aware narration for Marta
-            const FString MartaDisposition = WorldState ? WorldState->GetState(TEXT("npc_disposition"), TEXT("marta")) : FString();
-            if (MartaDisposition == TEXT("friendly"))
-            {
-                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta_friendly"));
-            }
-            else if (MartaDisposition == TEXT("suspicious"))
+            // Sprint K: NPC interaction state-aware narration
+            const FString InteractionState = GetNPCInteractionState(TEXT("marta"));
+            if (InteractionState == TEXT("upset"))
             {
                 Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta_suspicious"));
             }
-            else if (MartaDisposition == TEXT("trusting"))
+            else if (InteractionState == TEXT("helpful"))
             {
                 Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta_friendly"));
             }
+            else if (InteractionState == TEXT("engaged"))
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta_engaged"));
+            }
             else
             {
-                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta"));
+                // Sprint I legacy: check old disposition for backward compat
+                const FString MartaDisposition = WorldState ? WorldState->GetState(TEXT("npc_disposition"), TEXT("marta")) : FString();
+                if (MartaDisposition == TEXT("friendly") || MartaDisposition == TEXT("trusting"))
+                {
+                    Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta_friendly"));
+                }
+                else if (MartaDisposition == TEXT("suspicious"))
+                {
+                    Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta_suspicious"));
+                }
+                else
+                {
+                    Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_marta"));
+                }
+            }
+
+            // Sprint K: Transition from neutral to engaged on first talk
+            if (InteractionState == TEXT("neutral"))
+            {
+                TransitionNPCState(TEXT("marta"), TEXT("engaged"));
             }
 
             FDMAction MoveToBar;
@@ -253,7 +288,29 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
 
         if (Subject.Contains(TEXT("kael")))
         {
-            Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_kael"));
+            // Sprint K: NPC interaction state-aware narration
+            const FString KaelState = GetNPCInteractionState(TEXT("kael"));
+            if (KaelState == TEXT("engaged"))
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_kael_engaged"));
+            }
+            else if (KaelState == TEXT("upset"))
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_kael_suspicious"));
+            }
+            else if (KaelState == TEXT("helpful"))
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_kael_friendly"));
+            }
+            else
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_kael"));
+            }
+
+            if (KaelState == TEXT("neutral"))
+            {
+                TransitionNPCState(TEXT("kael"), TEXT("engaged"));
+            }
 
             FDMAction TalkAction;
             TalkAction.Action = TEXT("talk_gesture");
@@ -268,15 +325,38 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
 
         if (Subject.Contains(TEXT("durgan")) || Subject.Contains(TEXT("old man")))
         {
-            // Sprint I: Disposition-aware narration for Durgan
-            const FString DurganDisposition = WorldState ? WorldState->GetState(TEXT("npc_disposition"), TEXT("durgan")) : FString();
-            if (DurganDisposition == TEXT("open"))
+            // Sprint K: NPC interaction state-aware narration
+            const FString DurganState = GetNPCInteractionState(TEXT("durgan"));
+            if (DurganState == TEXT("engaged"))
             {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_durgan_engaged"));
+            }
+            else if (DurganState == TEXT("helpful"))
+            {
+                // Sprint I compat: use "open" narration for helpful state
                 Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_durgan_open"));
+            }
+            else if (DurganState == TEXT("upset"))
+            {
+                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_durgan_suspicious"));
             }
             else
             {
-                Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_durgan"));
+                // Legacy: check old disposition for backward compat
+                const FString DurganDisposition = WorldState ? WorldState->GetState(TEXT("npc_disposition"), TEXT("durgan")) : FString();
+                if (DurganDisposition == TEXT("open"))
+                {
+                    Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_durgan_open"));
+                }
+                else
+                {
+                    Scripted.Narration = NarrationPool->PickRandom(TEXT("talk_durgan"));
+                }
+            }
+
+            if (DurganState == TEXT("neutral"))
+            {
+                TransitionNPCState(TEXT("durgan"), TEXT("engaged"));
             }
 
             FDMAction TalkAction;
@@ -389,8 +469,15 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
             FDMAction LookAction;
             LookAction.Action = TEXT("idle");
             LookAction.Actor = TEXT("player");
-            LookAction.DelaySeconds = 1.5f;
+            LookAction.DelaySeconds = 0.6f;
             Scripted.Actions.Add(LookAction);
+
+            // Sprint K: Clue tracking for task mini-loop (unconditional — no check)
+            FDMWorldChange BoardClue;
+            BoardClue.Type = TEXT("set_state");
+            BoardClue.Key = TEXT("task_clue:board_notice");
+            BoardClue.Value = TEXT("true");
+            Scripted.WorldChanges.Add(BoardClue);
 
             ResolveParsedResponse(Scripted);
             return true;
@@ -585,12 +672,12 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
         SuccessAction.DelaySeconds = 0.5f;
         Scripted.SuccessBranch.Actions.Add(SuccessAction);
 
-        // World change: award the mysterious coin
+        // Sprint K: Award coin only on success (was dead code — never added to any array)
         FDMWorldChange CoinChange;
         CoinChange.Type = TEXT("inventory_add");
         CoinChange.Key = TEXT("player");
         CoinChange.Value = TEXT("mysterious_coin");
-        Scripted.SuccessBranch.Actions[0].DelaySeconds = 0.5f;
+        Scripted.SuccessBranch.WorldChanges.Add(CoinChange);
 
         Scripted.FailureBranch.Narration = TEXT("The shadowed hand snatches the coin away before you can grab it. You hear a dry chuckle from the booth, then silence.");
         FDMAction FailAction;
@@ -647,6 +734,13 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
         Disposition.Value = TEXT("friendly");
         Scripted.WorldChanges.Add(Disposition);
 
+        // Sprint K: NPC interaction state → helpful
+        FDMWorldChange HelpfulChange;
+        HelpfulChange.Type = TEXT("npc_interaction_state");
+        HelpfulChange.Key = TEXT("marta");
+        HelpfulChange.Value = TEXT("helpful");
+        Scripted.WorldChanges.Add(HelpfulChange);
+
         ResolveParsedResponse(Scripted);
         return true;
     }
@@ -689,11 +783,12 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
         SuccessAction.DelaySeconds = 0.5f;
         Scripted.SuccessBranch.Actions.Add(SuccessAction);
 
+        // Sprint K: Loot only on success (was unconditional — bug fix)
         FDMWorldChange LootChange;
         LootChange.Type = TEXT("inventory_add");
         LootChange.Key = TEXT("player");
         LootChange.Value = TEXT("stolen_coin_pouch");
-        Scripted.WorldChanges.Add(LootChange);
+        Scripted.SuccessBranch.WorldChanges.Add(LootChange);
 
         Scripted.FailureBranch.Narration = NarrationPool->PickRandom(TEXT("steal_fail"));
         FDMAction FailAction;
@@ -703,12 +798,19 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
         FailAction.DelaySeconds = 0.6f;
         Scripted.FailureBranch.Actions.Add(FailAction);
 
-        // Stateful consequence on failure: target becomes suspicious
+        // Sprint K: Suspicious only on failure (was unconditional — bug fix)
         FDMWorldChange SuspiciousChange;
         SuspiciousChange.Type = TEXT("npc_disposition");
         SuspiciousChange.Key = StealTarget;
         SuspiciousChange.Value = TEXT("suspicious");
-        Scripted.WorldChanges.Add(SuspiciousChange);
+        Scripted.FailureBranch.WorldChanges.Add(SuspiciousChange);
+
+        // Sprint K: NPC interaction state → upset on failure
+        FDMWorldChange UpsetChange;
+        UpsetChange.Type = TEXT("npc_interaction_state");
+        UpsetChange.Key = StealTarget;
+        UpsetChange.Value = TEXT("upset");
+        Scripted.FailureBranch.WorldChanges.Add(UpsetChange);
 
         ResolveParsedResponse(Scripted);
         return true;
@@ -730,6 +832,13 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
         SuccessAction.Actor = TEXT("player");
         SuccessAction.DelaySeconds = 0.8f;
         Scripted.SuccessBranch.Actions.Add(SuccessAction);
+
+        // Sprint K: Clue tracking for task mini-loop
+        FDMWorldChange ListenClue;
+        ListenClue.Type = TEXT("set_state");
+        ListenClue.Key = TEXT("task_clue:overheard_snippet");
+        ListenClue.Value = TEXT("true");
+        Scripted.SuccessBranch.WorldChanges.Add(ListenClue);
 
         Scripted.FailureBranch.Narration = NarrationPool->PickRandom(TEXT("listen_fail"));
         FDMAction FailAction;
@@ -759,11 +868,19 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
 
             Scripted.SuccessBranch.Narration = NarrationPool->PickRandom(TEXT("persuade_marta_success"));
 
+            // Sprint K: Disposition change only on success (was unconditional — bug fix)
             FDMWorldChange TrustChange;
             TrustChange.Type = TEXT("npc_disposition");
             TrustChange.Key = TEXT("marta");
             TrustChange.Value = TEXT("trusting");
-            Scripted.WorldChanges.Add(TrustChange);
+            Scripted.SuccessBranch.WorldChanges.Add(TrustChange);
+
+            // Sprint K: NPC interaction state → helpful on success
+            FDMWorldChange HelpfulChange;
+            HelpfulChange.Type = TEXT("npc_interaction_state");
+            HelpfulChange.Key = TEXT("marta");
+            HelpfulChange.Value = TEXT("helpful");
+            Scripted.SuccessBranch.WorldChanges.Add(HelpfulChange);
         }
         else if (Subject.Contains(TEXT("durgan")) || Subject.Contains(TEXT("old man")))
         {
@@ -773,11 +890,26 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
 
             Scripted.SuccessBranch.Narration = NarrationPool->PickRandom(TEXT("persuade_durgan_success"));
 
+            // Sprint K: Disposition change only on success (was unconditional — bug fix)
             FDMWorldChange OpenChange;
             OpenChange.Type = TEXT("npc_disposition");
             OpenChange.Key = TEXT("durgan");
             OpenChange.Value = TEXT("open");
-            Scripted.WorldChanges.Add(OpenChange);
+            Scripted.SuccessBranch.WorldChanges.Add(OpenChange);
+
+            // Sprint K: NPC interaction state → helpful on success
+            FDMWorldChange HelpfulChange;
+            HelpfulChange.Type = TEXT("npc_interaction_state");
+            HelpfulChange.Key = TEXT("durgan");
+            HelpfulChange.Value = TEXT("helpful");
+            Scripted.SuccessBranch.WorldChanges.Add(HelpfulChange);
+
+            // Sprint K: Clue tracking for task mini-loop
+            FDMWorldChange ClueChange;
+            ClueChange.Type = TEXT("set_state");
+            ClueChange.Key = TEXT("task_clue:durgan_lore");
+            ClueChange.Value = TEXT("true");
+            Scripted.SuccessBranch.WorldChanges.Add(ClueChange);
         }
         else if (Subject.Contains(TEXT("kael")))
         {
@@ -875,6 +1007,105 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
         LoseAction.Actor = TEXT("player");
         LoseAction.DelaySeconds = 0.5f;
         Scripted.FailureBranch.Actions.Add(LoseAction);
+
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // ===================================================================
+    // INTENT: ACCEPT / AGREE (Sprint K)
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Accept)
+    {
+        const FString TaskState = WorldState ? WorldState->GetState(TEXT("task"), TEXT("tavern_investigation")) : FString();
+        if (TaskState == TEXT("accepted") || TaskState == TEXT("resolved"))
+        {
+            Scripted.Narration = TaskState == TEXT("resolved")
+                ? TEXT("You've already completed the investigation. Marta gave you her thanks.")
+                : TEXT("You've already agreed to look into the disappearances. Time to gather clues.");
+        }
+        else
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("accept_task"));
+
+            FDMWorldChange TaskChange;
+            TaskChange.Type = TEXT("set_state");
+            TaskChange.Key = TEXT("task:tavern_investigation");
+            TaskChange.Value = TEXT("accepted");
+            Scripted.WorldChanges.Add(TaskChange);
+        }
+
+        FDMAction NodAction;
+        NodAction.Action = TEXT("nod");
+        NodAction.Actor = TEXT("marta");
+        NodAction.Target = TEXT("player");
+        NodAction.DelaySeconds = 0.5f;
+        Scripted.Actions.Add(NodAction);
+
+        ResolveParsedResponse(Scripted);
+        return true;
+    }
+
+    // ===================================================================
+    // INTENT: REPORT / INFORM (Sprint K)
+    // ===================================================================
+    if (Intent.Intent == EDMIntent::Report)
+    {
+        const FString TaskState = WorldState ? WorldState->GetState(TEXT("task"), TEXT("tavern_investigation")) : FString();
+        if (TaskState != TEXT("accepted"))
+        {
+            if (TaskState == TEXT("resolved"))
+            {
+                Scripted.Narration = TEXT("You've already reported your findings. Marta nods approvingly.");
+            }
+            else
+            {
+                Scripted.Narration = TEXT("You haven't taken on any task yet. Perhaps talk to Marta first.");
+            }
+
+            FDMAction IdleAction;
+            IdleAction.Action = TEXT("idle");
+            IdleAction.Actor = TEXT("player");
+            IdleAction.DelaySeconds = 0.5f;
+            Scripted.Actions.Add(IdleAction);
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
+        // Count clues
+        int32 ClueCount = 0;
+        if (WorldState)
+        {
+            if (WorldState->GetState(TEXT("task_clue"), TEXT("overheard_snippet")) == TEXT("true")) ClueCount++;
+            if (WorldState->GetState(TEXT("task_clue"), TEXT("durgan_lore")) == TEXT("true")) ClueCount++;
+            if (WorldState->GetState(TEXT("task_clue"), TEXT("board_notice")) == TEXT("true")) ClueCount++;
+        }
+
+        if (ClueCount == 0)
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("report_no_clues"));
+        }
+        else if (ClueCount == 1)
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("report_partial"));
+        }
+        else
+        {
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("report_full"));
+
+            FDMWorldChange ResolvedChange;
+            ResolvedChange.Type = TEXT("set_state");
+            ResolvedChange.Key = TEXT("task:tavern_investigation");
+            ResolvedChange.Value = TEXT("resolved");
+            Scripted.WorldChanges.Add(ResolvedChange);
+        }
+
+        FDMAction TalkAction;
+        TalkAction.Action = TEXT("talk_gesture");
+        TalkAction.Actor = TEXT("marta");
+        TalkAction.Target = TEXT("player");
+        TalkAction.DelaySeconds = 0.6f;
+        Scripted.Actions.Add(TalkAction);
 
         ResolveParsedResponse(Scripted);
         return true;
@@ -992,13 +1223,16 @@ void UDMBrainSubsystem::ResolveParsedResponse(const FDMResponse& Parsed)
     {
         OnDMNarration.Broadcast(Parsed.SuccessBranch.Narration);
         OnDMActionsReady.Broadcast(Parsed.SuccessBranch.Actions);
+        ApplyWorldChanges(Parsed.SuccessBranch.WorldChanges);
     }
     else
     {
         OnDMNarration.Broadcast(Parsed.FailureBranch.Narration);
         OnDMActionsReady.Broadcast(Parsed.FailureBranch.Actions);
+        ApplyWorldChanges(Parsed.FailureBranch.WorldChanges);
     }
 
+    // Shared (unconditional) world changes still applied regardless of check outcome
     ApplyWorldChanges(Parsed.WorldChanges);
 }
 
@@ -1015,6 +1249,32 @@ void UDMBrainSubsystem::ApplyWorldChanges(const TArray<FDMWorldChange>& WorldCha
             {
                 WorldState->SetState(TEXT("npc_disposition"), Change.Key, Change.Value);
                 UE_LOG(LogDMBrainSubsystem, Log, TEXT("NPC disposition: %s -> %s"), *Change.Key, *Change.Value);
+            }
+            continue;
+        }
+
+        // Sprint K: NPC interaction state — stored in WorldState subsystem
+        if (Type == TEXT("npc_interaction_state"))
+        {
+            if (WorldState)
+            {
+                WorldState->SetState(TEXT("npc_interaction_state"), Change.Key, Change.Value);
+                UE_LOG(LogDMBrainSubsystem, Log, TEXT("NPC interaction state: %s -> %s"), *Change.Key, *Change.Value);
+            }
+            continue;
+        }
+
+        // Sprint K: Generic state setter — Key format is "category:key"
+        if (Type == TEXT("set_state"))
+        {
+            if (WorldState)
+            {
+                FString Category, StateKey;
+                if (Change.Key.Split(TEXT(":"), &Category, &StateKey))
+                {
+                    WorldState->SetState(Category, StateKey, Change.Value);
+                    UE_LOG(LogDMBrainSubsystem, Log, TEXT("SetState: %s.%s = %s"), *Category, *StateKey, *Change.Value);
+                }
             }
             continue;
         }

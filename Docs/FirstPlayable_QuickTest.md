@@ -1,6 +1,6 @@
 # First Playable - Quick Test Script
 
-**Sprint:** J
+**Sprint:** K
 **Time:** ~5 minutes
 **Prerequisite:** Successful Development Editor build (`GreymawChroniclesEditor Win64 Development`)
 
@@ -159,18 +159,77 @@ Type each prompt into the input box and press Enter. Verify the expected respons
 - **Narration:** Kael offers expedition help (varies — 3 variants).
 - **Visual:** Dark green tinted mannequin visible.
 
+---
+
+## Sprint K Mini-Loop (10-Prompt Focused Flow)
+
+The following 10-prompt sequence exercises all Sprint K features in order. Can be run after or instead of the full 26-prompt sequence above.
+
+### K1. `look around` — Establish scene
+- **Narration:** Tavern description (varies). Camera: Establishing mode.
+
+### K2. `talk to marta` — Learn about missing villagers
+- **Narration:** Marta mentions missing villagers. **NPC state:** Marta transitions from `neutral` to `engaged`.
+- **Verify:** If you `talk to marta` again, narration should use engaged variant (different from first).
+
+### K3. `accept the task` — Accept tavern investigation
+- **Intent:** Accept. **Narration:** Task accepted confirmation (3 variants).
+- **State:** `task:tavern_investigation = accepted` in WorldState.
+- **Toast:** Action feedback confirms acceptance.
+
+### K4. `eavesdrop` — Perception check, clue if pass
+- **Check:** Perception DC 12.
+- **Branch (PASS):** Overheard snippet + `task_clue:overheard_snippet = true`.
+- **Branch (FAIL):** Only tavern noise. No clue set.
+
+### K5. `convince durgan` — Persuasion check, clue if pass
+- **Check:** Persuasion DC 14.
+- **Branch (PASS):** Durgan shares lore + `task_clue:durgan_lore = true` + Durgan state -> `helpful`.
+- **Branch (FAIL):** Durgan refuses. No disposition change.
+
+### K6. `read the quest board` — Clue (no check)
+- **Narration:** Notice board details. **State:** `task_clue:board_notice = true` (unconditional).
+
+### K7. `report to marta` — Resolution based on clue count
+- **0 clues:** "You haven't learned anything yet." Task remains accepted.
+- **1 clue:** Partial resolution narration.
+- **2+ clues:** Full resolution narration. `task:tavern_investigation = resolved`.
+
+### K8. `steal from durgan` — Verify bug fix (loot only on pass)
+- **Check:** Sleight of Hand DC 10.
+- **Branch (PASS):** Stolen coin pouch added to inventory. Green "Acquired" toast. Durgan NOT upset.
+- **Branch (FAIL):** NO loot. Durgan becomes suspicious + upset.
+- **Bug fix verified:** Loot only on success, suspicious only on failure.
+
+### K9. `talk to durgan` — Verify NPC state routing
+- **If K8 passed (no steal fail):** Durgan in `engaged` or `helpful` state -> engaged/friendly narration.
+- **If K8 failed:** Durgan in `upset` state -> suspicious narration variant.
+- **Verify:** Narration clearly differs based on NPC interaction state.
+
+### K10. Quit + Restart PIE — Verify save/load feedback
+- **On save (before quit):** Dim grey "Autosaved" toast (2s, subtle).
+- **On restart:** "Loaded save from <timestamp>" toast. World state, conversation, inventory persist.
+- **Console:** Type `gc.save` in console -> "Game saved" toast. Type `gc.load` -> "Save loaded" toast.
+
+---
+
 ## Pass Criteria
 
-- All 26 prompts produce narration text in the panel.
+- All 26 base prompts + 10 Sprint K prompts produce narration text.
 - Narration text **varies** on repeated attempts of the same prompt (narration pool).
 - Fuzzy matching works: synonyms and natural phrasing resolve to correct intent.
 - 3 micro-events trigger ability checks (perception DC 12, intimidation DC 13, sleight_of_hand DC 11).
-- 6 Sprint I intents trigger correctly: Order, Steal, Listen, Persuade, Rest, Gamble.
+- 8 Sprint I/K intents trigger correctly: Order, Steal, Listen, Persuade, Rest, Gamble, Accept, Report.
 - `arm wrestle` still triggers athletics DC 14 check.
 - **NPC state persists within session:** ordering from Marta → friendly narration on next talk; failed steal → suspicious narration + order refusal; successful persuasion of Durgan → extra lore on next talk.
 - **Sprint J: NPC actors exist** — 3 colored mannequins visible, camera targets them by tag (no fallback).
 - **Sprint J: Inventory tracking** — successful steal adds item to Equipment, green "Acquired" toast appears.
 - **Sprint J: Save/Load** — quit and restart PIE, world state and conversation history persist.
+- **Sprint K: Bug fix** — steal loot only on success, suspicious only on failure. Persuade disposition only on success.
+- **Sprint K: NPC interaction state** — first talk -> engaged, persuade pass -> helpful, steal fail -> upset. Narration routes correctly per state.
+- **Sprint K: Task mini-loop** — accept task -> gather clues -> report -> resolution. 2+ clues required for full resolution.
+- **Sprint K: Save/Load feedback** — "Autosaved" and "Loaded save from <time>" toasts. `gc.save`/`gc.load` console commands work.
+- **Sprint K: Camera polish** — null-safe camera fallback, smoother blend times, no dead-air delays.
 - Action feedback toasts appear mid-right with multi-line check breakdown (3 lines: header/roll/result) and auto-fade after ~5 seconds for checks.
 - Debug overlay updates state, action count, and check result correctly.
 - Player visually moves during movement-intent prompts.
@@ -180,7 +239,7 @@ Type each prompt into the input box and press Enter. Verify the expected respons
 
 ## Automated Tests
 
-Run all tests (41 total):
+Run all tests (46 total):
 ```
 UnrealEditor-Cmd.exe <project> -ExecCmds="Automation RunTests GreymawChronicles" -NullRHI -NoSound
 ```
@@ -218,11 +277,28 @@ UnrealEditor-Cmd.exe <project> -ExecCmds="Automation RunTests GreymawChronicles"
 - `GreymawChronicles.SprintJ.Inventory.DelegateExists` — OnInventoryChanged delegate exists
 - `GreymawChronicles.SprintJ.WorldState.InvalidJSON` — FromJSON handles malformed input
 
+### Sprint K Tests (12):
+- `GreymawChronicles.SprintK.BugFix.StealSuccess_GivesLoot` — Loot on SuccessBranch.WorldChanges
+- `GreymawChronicles.SprintK.BugFix.StealFail_NoLoot` — No inventory_add on FailureBranch or shared
+- `GreymawChronicles.SprintK.BugFix.StealFail_SetsSuspicious` — Suspicious + upset on FailureBranch only
+- `GreymawChronicles.SprintK.BugFix.PersuadeSuccess_SetsDisposition` — Disposition on SuccessBranch only
+- `GreymawChronicles.SprintK.BugFix.PersuadeFail_NoDisposition` — No disposition on FailureBranch or shared
+- `GreymawChronicles.SprintK.NPCState.TalkTransitionsToEngaged` — First talk -> engaged state
+- `GreymawChronicles.SprintK.NPCState.UpsetBlocksHelpful` — Upset persists, other NPCs unaffected
+- `GreymawChronicles.SprintK.TaskLoop.AcceptSetsState` — Accept -> task accepted + JSON round-trip
+- `GreymawChronicles.SprintK.TaskLoop.ReportCountsClues` — 2+ clues -> resolved
+- `GreymawChronicles.SprintK.TaskLoop.ReportNoClues` — 0 clues -> not resolved
+- `GreymawChronicles.SprintK.SaveLoad.FeedbackDelegateFires` — OnSaveLoadFeedback broadcasts correctly
+- `GreymawChronicles.SprintK.Intent.AcceptReport` — Accept/Report intents with keyword variants
+
 ## Known Limitations
 
 - Mannequin mesh may not exist in all project configurations (NPC becomes invisible tagged actor).
 - Dynamic material tint is best-effort — depends on material parameter names.
 - Camera subsystem switches mode but has no physical camera actors placed.
 - Floor and bar use engine primitive meshes (white cubes) until tavern asset pack is imported.
-- Save slot is single-slot auto-save only (no manual save management UI).
+- Save slot is single-slot auto-save only (`gc.save`/`gc.load` console commands available for manual control).
 - Tavern asset pack (Stylized Medieval Tavern, Baturinets) requires manual import from UE 5.4 dummy project.
+- NPC interaction state has no auto-recovery from "upset" — player must face consequences.
+- Task mini-loop is single-task only (tavern_investigation). Framework supports expansion.
+- Clue tracking is binary (found/not found) — no partial knowledge or quality levels.

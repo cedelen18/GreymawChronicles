@@ -24,6 +24,8 @@ enum class EDMIntent : uint8
     Persuade    UMETA(DisplayName = "Persuade / Convince / Charm"),
     Rest        UMETA(DisplayName = "Rest / Relax / Meditate"),
     Gamble      UMETA(DisplayName = "Gamble / Bet / Wager"),
+    Accept      UMETA(DisplayName = "Accept / Agree / Volunteer"),
+    Report      UMETA(DisplayName = "Report / Inform / Share"),
     Unknown     UMETA(DisplayName = "Unknown / Fallback")
 };
 

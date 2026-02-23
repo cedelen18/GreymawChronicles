@@ -52,6 +52,10 @@ private:
     UFUNCTION()
     void HandleInventoryChanged(const FString& ItemName);
 
+    /** Sprint K: Show toast for save/load feedback. */
+    UFUNCTION()
+    void HandleSaveLoadFeedback(const FString& Message);
+
     struct FToastEntry
     {
         FString Text;

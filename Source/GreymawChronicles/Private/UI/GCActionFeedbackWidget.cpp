@@ -1,6 +1,7 @@
 #include "UI/GCActionFeedbackWidget.h"
 
 #include "ActionSystem/ActionDirectorSubsystem.h"
+#include "Core/GCGameInstance.h"
 #include "DungeonMaster/DMBrainSubsystem.h"
 #include "DungeonMaster/DMTypes.h"
 
@@ -128,6 +129,12 @@ void UGCActionFeedbackWidget::BindToSubsystems()
         {
             ActionDirector->OnActionSequenceComplete.AddDynamic(this, &UGCActionFeedbackWidget::HandleActionSequenceComplete);
         }
+
+        // Sprint K: Bind save/load feedback
+        if (UGCGameInstance* GCGI = Cast<UGCGameInstance>(GI))
+        {
+            GCGI->OnSaveLoadFeedback.AddDynamic(this, &UGCActionFeedbackWidget::HandleSaveLoadFeedback);
+        }
     }
 }
 
@@ -186,4 +193,10 @@ void UGCActionFeedbackWidget::HandleInventoryChanged(const FString& ItemName)
     FString Display = ItemName.Replace(TEXT("_"), TEXT(" "));
     PushToast(FString::Printf(TEXT("Acquired: %s"), *Display),
         FLinearColor(0.2f, 1.0f, 0.6f, 1.0f));
+}
+
+void UGCActionFeedbackWidget::HandleSaveLoadFeedback(const FString& Message)
+{
+    // Sprint K: Subtle dim grey toast for save/load, shorter duration
+    PushToastWithDuration(Message, FLinearColor(0.5f, 0.5f, 0.5f, 0.7f), 2.0f);
 }

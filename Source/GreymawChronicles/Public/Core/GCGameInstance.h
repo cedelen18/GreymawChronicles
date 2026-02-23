@@ -9,6 +9,8 @@ class UDMBrainSubsystem;
 class UActionDirectorSubsystem;
 struct FDMAction;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSaveLoadFeedback, const FString&, Message);
+
 UCLASS()
 class GREYMAWCHRONICLES_API UGCGameInstance : public UGameInstance
 {
@@ -32,6 +34,10 @@ public:
     UFUNCTION(BlueprintPure, Category = "Greymaw|Save")
     bool HasSaveGame() const;
 
+    /** Sprint K: Feedback delegate for save/load events. */
+    UPROPERTY(BlueprintAssignable, Category = "Greymaw|Save")
+    FOnSaveLoadFeedback OnSaveLoadFeedback;
+
 private:
     UFUNCTION()
     void HandleDMActionsReady(const TArray<FDMAction>& Actions);
@@ -42,4 +48,8 @@ private:
 
     UPROPERTY()
     TObjectPtr<UActionDirectorSubsystem> ActionDirector;
+
+    /** Sprint K: Console commands for manual save/load. */
+    TUniquePtr<FAutoConsoleCommand> ManualSaveCmd;
+    TUniquePtr<FAutoConsoleCommand> ManualLoadCmd;
 };
