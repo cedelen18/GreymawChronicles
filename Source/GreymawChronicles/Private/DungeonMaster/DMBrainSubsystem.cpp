@@ -1,11 +1,15 @@
 #include "DungeonMaster/DMBrainSubsystem.h"
 
 #include "DungeonMaster/DMConversationHistory.h"
+#include "DungeonMaster/DMDialogueTree.h"
 #include "DungeonMaster/DMIntentClassifier.h"
 #include "DungeonMaster/DMNarrationPool.h"
 #include "DungeonMaster/DMPromptBuilder.h"
 #include "DungeonMaster/DMResponseParser.h"
 #include "DungeonMaster/DMWorldStateSubsystem.h"
+#include "Combat/GCCombatEncounter.h"
+#include "Combat/GCEnemyTemplate.h"
+#include "Quest/GCQuestSubsystem.h"
 #include "Gameplay/GCCharacterSheet.h"
 #include "Gameplay/DiceRoller.h"
 #include "Ollama/OllamaSubsystem.h"
@@ -34,9 +38,17 @@ void UDMBrainSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     IntentClassifier = NewObject<UDMIntentClassifier>(this);
     NarrationPool = NewObject<UDMNarrationPool>(this);
     NarrationPool->PopulateTavernDefaults();
+    NarrationPool->PopulateTrailDefaults();
+    NarrationPool->PopulateCombatDefaults();
+    NarrationPool->PopulateQuestDefaults();
 
     // Sprint I: World state subsystem for NPC dispositions
     WorldState = GetGameInstance() ? GetGameInstance()->GetSubsystem<UDMWorldStateSubsystem>() : nullptr;
+
+    // Sprint L: Dialogue tree for NPC conversations
+    DialogueTree = NewObject<UDMDialogueTree>(this);
+    DialogueTree->PopulateMartaDialogue();
+    DialogueTree->PopulateDurganDialogue();
 }
 
 void UDMBrainSubsystem::SetRuleContext(UGCCharacterSheet* InPlayerSheet)
@@ -120,6 +132,14 @@ void UDMBrainSubsystem::ProcessPlayerInput(const FString& PlayerInput)
     }
 
     SetProcessingState(true);
+
+    // Sprint L: Combat intercept — all input routes through combat handler while active
+    if (ActiveEncounter && !ActiveEncounter->IsCombatOver())
+    {
+        TryHandleCombatInput(SanitizedInput);
+        SetProcessingState(false);
+        return;
+    }
 
     if (bUseTavernScriptedBootstrap && TryHandleScriptedTavernPrompt(SanitizedInput))
     {
@@ -446,6 +466,55 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
             return true;
         }
 
+        // Sprint L: Leave tavern → scene transition to trail
+        if (Subject.Contains(TEXT("outside")) || Subject.Contains(TEXT("trail")) || Subject.Contains(TEXT("leave")) || Lower.Contains(TEXT("leave tavern")) || Lower.Contains(TEXT("go outside")))
+        {
+            // Block if combat is active
+            if (ActiveEncounter && !ActiveEncounter->IsCombatOver())
+            {
+                Scripted.Narration = TEXT("You can't leave while enemies still threaten you!");
+                ResolveParsedResponse(Scripted);
+                return true;
+            }
+
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("trail_arrive"));
+
+            // Set scene state
+            if (WorldState)
+            {
+                WorldState->SetState(TEXT("scene"), TEXT("current"), TEXT("greymaw_trail"));
+            }
+
+            // Scene change in response
+            Scripted.SceneChange.bSceneChangeRequested = true;
+            Scripted.SceneChange.SceneId = TEXT("greymaw_trail");
+
+            FDMAction MoveAction;
+            MoveAction.Action = TEXT("move");
+            MoveAction.Actor = TEXT("player");
+            MoveAction.DelaySeconds = 1.0f;
+            Scripted.Actions.Add(MoveAction);
+
+            ResolveParsedResponse(Scripted);
+
+            // Sprint L: Auto-trigger goblin ambush on trail
+            TArray<FGCEnemyTemplate> Goblins;
+            Goblins.Add(FGCEnemyTemplate::MakeGoblin());
+            Goblins.Add(FGCEnemyTemplate::MakeGoblin());
+
+            ActiveEncounter = NewObject<UGCCombatEncounter>(this);
+            ActiveEncounter->InitializeEncounter(PlayerSheet, Goblins, DiceRoller);
+            ActiveEncounter->RollInitiative();
+
+            if (WorldState)
+            {
+                WorldState->SetState(TEXT("combat"), TEXT("active"), TEXT("true"));
+            }
+            OnCombatStateChanged.Broadcast(true);
+            OnDMNarration.Broadcast(NarrationPool->PickRandom(TEXT("combat_start")));
+            return true;
+        }
+
         // Generic move fallback
         Scripted.Narration = TEXT("You shift your position in the taproom, taking in the scene from a new angle.");
         FDMAction IdleAction;
@@ -540,6 +609,28 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
     // ===================================================================
     if (Intent.Intent == EDMIntent::Challenge)
     {
+        // Sprint L: Challenge goblin — start combat encounter
+        if (Subject.Contains(TEXT("goblin")) || Lower.Contains(TEXT("fight goblin")))
+        {
+            TArray<FGCEnemyTemplate> Goblins;
+            Goblins.Add(FGCEnemyTemplate::MakeGoblin());
+            Goblins.Add(FGCEnemyTemplate::MakeGoblin());
+
+            ActiveEncounter = NewObject<UGCCombatEncounter>(this);
+            ActiveEncounter->InitializeEncounter(PlayerSheet, Goblins, DiceRoller);
+            ActiveEncounter->RollInitiative();
+
+            if (WorldState)
+            {
+                WorldState->SetState(TEXT("combat"), TEXT("active"), TEXT("true"));
+            }
+            OnCombatStateChanged.Broadcast(true);
+
+            Scripted.Narration = NarrationPool->PickRandom(TEXT("combat_start"));
+            ResolveParsedResponse(Scripted);
+            return true;
+        }
+
         // Arm wrestle / challenge Kael (original)
         if (Subject.Contains(TEXT("kael")) || Lower.Contains(TEXT("arm wrestle")) || Lower.Contains(TEXT("wrestle")))
         {
@@ -1033,6 +1124,14 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
             TaskChange.Key = TEXT("task:tavern_investigation");
             TaskChange.Value = TEXT("accepted");
             Scripted.WorldChanges.Add(TaskChange);
+
+            // Sprint L: Start quest in QuestSubsystem
+            if (UGCQuestSubsystem* QuestSys = GetGameInstance() ? GetGameInstance()->GetSubsystem<UGCQuestSubsystem>() : nullptr)
+            {
+                QuestSys->StartQuest(TEXT("tavern_investigation"), TEXT("Tavern Investigation"),
+                    TEXT("Investigate the disappearances in Thornhaven. Gather clues from the notice board, eavesdrop on patrons, and talk to Durgan."));
+                QuestSys->UpdateObjective(TEXT("tavern_investigation"), TEXT("Gather clues and report to Marta."));
+            }
         }
 
         FDMAction NodAction;
@@ -1098,6 +1197,12 @@ bool UDMBrainSubsystem::HandleIntentScripted(const FDMIntentResult& Intent, cons
             ResolvedChange.Key = TEXT("task:tavern_investigation");
             ResolvedChange.Value = TEXT("resolved");
             Scripted.WorldChanges.Add(ResolvedChange);
+
+            // Sprint L: Complete quest in QuestSubsystem
+            if (UGCQuestSubsystem* QuestSys = GetGameInstance() ? GetGameInstance()->GetSubsystem<UGCQuestSubsystem>() : nullptr)
+            {
+                QuestSys->CompleteQuest(TEXT("tavern_investigation"));
+            }
         }
 
         FDMAction TalkAction;
@@ -1234,6 +1339,132 @@ void UDMBrainSubsystem::ResolveParsedResponse(const FDMResponse& Parsed)
 
     // Shared (unconditional) world changes still applied regardless of check outcome
     ApplyWorldChanges(Parsed.WorldChanges);
+}
+
+bool UDMBrainSubsystem::TryHandleCombatInput(const FString& PlayerInput)
+{
+    if (!ActiveEncounter || ActiveEncounter->IsCombatOver())
+    {
+        return false;
+    }
+
+    if (!ActiveEncounter->IsPlayerTurn())
+    {
+        return false;
+    }
+
+    const FString Lower = PlayerInput.ToLower();
+
+    // Flee attempt
+    if (Lower.Contains(TEXT("flee")) || Lower.Contains(TEXT("run")) || Lower.Contains(TEXT("escape")))
+    {
+        OnDMNarration.Broadcast(TEXT("You disengage and flee from combat!"));
+        ActiveEncounter = nullptr;
+        if (WorldState)
+        {
+            WorldState->SetState(TEXT("combat"), TEXT("active"), TEXT("false"));
+        }
+        OnCombatStateChanged.Broadcast(false);
+        return true;
+    }
+
+    // Attack
+    if (Lower.Contains(TEXT("attack")) || Lower.Contains(TEXT("hit")) || Lower.Contains(TEXT("strike")) || Lower.Contains(TEXT("swing")))
+    {
+        if (ActiveEncounter->GetEnemyRoster().Num() == 0) { return false; }
+
+        // Find first alive enemy
+        int32 TargetIdx = -1;
+        for (int32 i = 0; i < ActiveEncounter->GetEnemyRoster().Num(); ++i)
+        {
+            if (ActiveEncounter->GetEnemyRoster()[i].CurrentHP > 0) { TargetIdx = i; break; }
+        }
+        if (TargetIdx < 0) { return false; }
+
+        FGCEnemyTemplate& Target = ActiveEncounter->GetEnemyRoster()[TargetIdx];
+
+        // Player attack roll (manual — enemies lack CharacterSheet)
+        if (PlayerSheet && DiceRoller)
+        {
+            const int32 StrMod = PlayerSheet->GetAbilityModifier(EGCAbility::Strength);
+            const int32 AttackRoll = DiceRoller->RollDice(1, 20);
+            const int32 AttackTotal = AttackRoll + StrMod + PlayerSheet->ProficiencyBonus;
+            const bool bHit = (AttackRoll == 20) || (AttackRoll != 1 && AttackTotal >= Target.ArmorClass);
+            const bool bCrit = (AttackRoll == 20);
+
+            if (bHit)
+            {
+                const int32 DamageDice = bCrit ? 2 : 1;
+                const int32 Damage = FMath::Max(1, DiceRoller->RollDice(DamageDice, 8) + StrMod);
+                Target.CurrentHP = FMath::Max(0, Target.CurrentHP - Damage);
+                OnDMNarration.Broadcast(FString::Printf(TEXT("%s — You strike the %s for %d damage! (HP: %d/%d)"),
+                    *NarrationPool->PickRandom(TEXT("combat_player_hit")), *Target.CreatureName, Damage, Target.CurrentHP, Target.MaxHP));
+            }
+            else
+            {
+                OnDMNarration.Broadcast(FString::Printf(TEXT("%s — Your attack misses the %s!"),
+                    *NarrationPool->PickRandom(TEXT("combat_player_miss")), *Target.CreatureName));
+            }
+        }
+
+        // Advance turn — resolve enemy turns
+        ActiveEncounter->AdvanceTurn();
+        while (!ActiveEncounter->IsCombatOver() && !ActiveEncounter->IsPlayerTurn())
+        {
+            const FString Actor = ActiveEncounter->GetCurrentTurnActor();
+            for (FGCEnemyTemplate& Enemy : ActiveEncounter->GetEnemyRoster())
+            {
+                // Actor format is "Goblin_0", "Goblin_1" etc. — match by StartsWith
+                if (Actor.StartsWith(Enemy.CreatureName) && Enemy.CurrentHP > 0 && PlayerSheet && DiceRoller)
+                {
+                    const int32 EnemyRoll = DiceRoller->RollDice(1, 20);
+                    const int32 EnemyTotal = EnemyRoll + Enemy.AttackModifier;
+                    const bool bEnemyHit = (EnemyRoll == 20) || (EnemyRoll != 1 && EnemyTotal >= PlayerSheet->ArmorClass);
+                    const bool bEnemyCrit = (EnemyRoll == 20);
+
+                    if (bEnemyHit)
+                    {
+                        const int32 DmgDice = bEnemyCrit ? (Enemy.Weapon.DamageDiceCount * 2) : Enemy.Weapon.DamageDiceCount;
+                        const int32 Damage = FMath::Max(1, DiceRoller->RollDice(DmgDice, Enemy.Weapon.DamageDieSize) + Enemy.AttackModifier);
+                        CombatResolver->ApplyDamage(PlayerSheet, Damage);
+                        OnDMNarration.Broadcast(FString::Printf(TEXT("%s — The %s hits you for %d damage! (HP: %d/%d)"),
+                            *NarrationPool->PickRandom(TEXT("combat_enemy_hit")), *Enemy.CreatureName, Damage, PlayerSheet->CurrentHP, PlayerSheet->MaxHP));
+                    }
+                    else
+                    {
+                        OnDMNarration.Broadcast(FString::Printf(TEXT("%s — The %s's attack misses!"),
+                            *NarrationPool->PickRandom(TEXT("combat_enemy_miss")), *Enemy.CreatureName));
+                    }
+                    break;
+                }
+            }
+            ActiveEncounter->AdvanceTurn();
+        }
+
+        // Check combat end
+        if (ActiveEncounter->IsCombatOver())
+        {
+            const ECombatOutcome Outcome = ActiveEncounter->GetOutcome();
+            if (Outcome == ECombatOutcome::Victory)
+            {
+                OnDMNarration.Broadcast(NarrationPool->PickRandom(TEXT("combat_victory")));
+            }
+            else
+            {
+                OnDMNarration.Broadcast(NarrationPool->PickRandom(TEXT("combat_defeat")));
+                if (PlayerSheet) { PlayerSheet->CurrentHP = 1; }
+            }
+            ActiveEncounter = nullptr;
+            if (WorldState) { WorldState->SetState(TEXT("combat"), TEXT("active"), TEXT("false")); }
+            OnCombatStateChanged.Broadcast(false);
+        }
+
+        return true;
+    }
+
+    // Unrecognized combat input — prompt
+    OnDMNarration.Broadcast(TEXT("You're in combat! What do you do? (attack, cast, flee)"));
+    return true;
 }
 
 void UDMBrainSubsystem::ApplyWorldChanges(const TArray<FDMWorldChange>& WorldChanges)

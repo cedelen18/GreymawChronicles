@@ -56,6 +56,10 @@ private:
     UFUNCTION()
     void HandleSaveLoadFeedback(const FString& Message);
 
+    /** Sprint L: Show combat start/end toast. */
+    UFUNCTION()
+    void HandleCombatStateChanged(bool bInCombat);
+
     struct FToastEntry
     {
         FString Text;

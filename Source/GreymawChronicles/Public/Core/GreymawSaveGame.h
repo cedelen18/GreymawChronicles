@@ -18,6 +18,9 @@ public:
     static const FString SaveSlotName;
     static constexpr int32 UserIndex = 0;
 
+    /** Sprint L: Generate slot name for manual save slots (0-2). */
+    static FString MakeSlotName(int32 SlotIndex);
+
     UPROPERTY()
     FString CharacterSheetJSON;
 
@@ -29,4 +32,16 @@ public:
 
     UPROPERTY()
     FString SaveTimestamp;
+
+    /** Sprint L: Quest log serialized as JSON. */
+    UPROPERTY()
+    FString QuestLogJSON;
+
+    /** Sprint L: Display name for this save slot. */
+    UPROPERTY()
+    FString SlotDisplayName;
+
+    /** Sprint L: Active scene ID at time of save. */
+    UPROPERTY()
+    FString ActiveSceneId;
 };

@@ -1,4 +1,5 @@
 #include "Scene/SceneDirectorSubsystem.h"
+#include "DungeonMaster/DMWorldStateSubsystem.h"
 
 bool UGCSceneDirectorSubsystem::RequestLoadSceneAsset(const UGCSceneTemplateAsset* SceneAsset)
 {
@@ -18,6 +19,16 @@ bool UGCSceneDirectorSubsystem::RequestLoadSceneTemplate(const FGCSceneTemplate&
     }
 
     ActiveSceneId = SceneTemplate.SceneId;
+
+    // Sprint L: Sync WorldState with active scene ID
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (UDMWorldStateSubsystem* WorldState = GI->GetSubsystem<UDMWorldStateSubsystem>())
+        {
+            WorldState->SetState(TEXT("scene"), TEXT("current"), SceneTemplate.SceneId.ToString());
+        }
+    }
+
     OnSceneLoadRequested.Broadcast(SceneTemplate);
     return true;
 }

@@ -34,6 +34,18 @@ public:
     UFUNCTION(BlueprintPure, Category = "Greymaw|Save")
     bool HasSaveGame() const;
 
+    /** Sprint L: Save to a manual slot (0-2). */
+    UFUNCTION(BlueprintCallable, Category = "Greymaw|Save")
+    bool SaveToSlot(int32 SlotIndex);
+
+    /** Sprint L: Load from a manual slot (0-2). */
+    UFUNCTION(BlueprintCallable, Category = "Greymaw|Save")
+    bool LoadFromSlot(int32 SlotIndex);
+
+    /** Sprint L: Check if a manual slot has a save. */
+    UFUNCTION(BlueprintPure, Category = "Greymaw|Save")
+    bool HasSaveInSlot(int32 SlotIndex) const;
+
     /** Sprint K: Feedback delegate for save/load events. */
     UPROPERTY(BlueprintAssignable, Category = "Greymaw|Save")
     FOnSaveLoadFeedback OnSaveLoadFeedback;

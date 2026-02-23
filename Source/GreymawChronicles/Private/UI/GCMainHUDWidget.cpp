@@ -6,6 +6,8 @@
 #include "UI/GCHUDOverlayWidget.h"
 #include "UI/GCActionFeedbackWidget.h"
 #include "UI/GCPlayerInputWidget.h"
+#include "UI/GCQuestJournalWidget.h"
+#include "UI/GCSaveLoadWidget.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -82,5 +84,31 @@ void UGCMainHUDWidget::EnsureFallbackWidgets()
         InputSlot->SetAutoSize(false);
         InputSlot->SetPosition(FVector2D(40.0f, 790.0f));
         InputSlot->SetSize(FVector2D(1200.0f, 100.0f));
+    }
+
+    // Sprint L: Quest journal panel (hidden by default)
+    QuestJournal = WidgetTree->ConstructWidget<UGCQuestJournalWidget>(UGCQuestJournalWidget::StaticClass(), TEXT("QuestJournal"));
+    if (UCanvasPanelSlot* QuestSlot = Root->AddChildToCanvas(QuestJournal))
+    {
+        QuestSlot->SetAutoSize(false);
+        QuestSlot->SetPosition(FVector2D(40.0f, 100.0f));
+        QuestSlot->SetSize(FVector2D(400.0f, 500.0f));
+    }
+    if (QuestJournal)
+    {
+        QuestJournal->SetVisibility(ESlateVisibility::Collapsed);
+    }
+
+    // Sprint L: Save/load panel (hidden by default)
+    SaveLoadPanel = WidgetTree->ConstructWidget<UGCSaveLoadWidget>(UGCSaveLoadWidget::StaticClass(), TEXT("SaveLoadPanel"));
+    if (UCanvasPanelSlot* SaveSlot = Root->AddChildToCanvas(SaveLoadPanel))
+    {
+        SaveSlot->SetAutoSize(false);
+        SaveSlot->SetPosition(FVector2D(400.0f, 200.0f));
+        SaveSlot->SetSize(FVector2D(500.0f, 300.0f));
+    }
+    if (SaveLoadPanel)
+    {
+        SaveLoadPanel->SetVisibility(ESlateVisibility::Collapsed);
     }
 }

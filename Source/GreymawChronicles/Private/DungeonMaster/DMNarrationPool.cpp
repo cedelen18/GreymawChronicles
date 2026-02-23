@@ -312,3 +312,90 @@ void UDMNarrationPool::PopulateTavernDefaults()
         TEXT("Marta listens in stunned silence, then exhales. 'So the Greymaw is real. The clues all point the same direction.' She slides your reward across the bar. 'You've done Thornhaven a great service tonight. We won't forget it.'")
     });
 }
+
+void UDMNarrationPool::PopulateTrailDefaults()
+{
+    RegisterSlot(TEXT("trail_arrive"), {
+        TEXT("You step through the village gate and onto the Greymaw trail. The rain has eased to a mist, but the trees press close, their branches grasping like skeletal fingers. The path winds north into darkness."),
+        TEXT("The tavern door shuts behind you. Beyond the village walls, the Greymaw trail stretches into a fog-choked forest. The ground is soft and your boots leave deep impressions in the mud."),
+        TEXT("Cold air hits you as you leave Thornhaven behind. The trail ahead is narrow and overgrown. Somewhere in the distance, an owl calls — then silence, heavy and complete.")
+    });
+
+    RegisterSlot(TEXT("trail_look"), {
+        TEXT("Gnarled oaks line the trail, their trunks scarred with old claw marks. The fog thickens ahead where the path dips into a ravine. You can barely see thirty paces."),
+        TEXT("The forest floor is littered with fallen leaves and broken branches. Strange mushrooms grow in clusters around the tree roots, faintly luminescent in the gloom."),
+        TEXT("You scan the surroundings. The trail splits ahead — one fork climbs toward rocky ground, the other descends into shadow. Both feel wrong.")
+    });
+
+    RegisterSlot(TEXT("trail_cave_entrance"), {
+        TEXT("The trail ends at a yawning cave mouth. Ancient stones frame the entrance, covered in moss and faded runes. A cold draft flows outward, carrying the scent of deep earth."),
+        TEXT("Before you stands the Greymaw itself — a collapsed mine entrance partially cleared. The support timbers are ancient and splintered. Something glows faintly deep within."),
+        TEXT("The cave entrance is wider than you expected. Pick-marks cover the stone walls, decades old. Beyond the threshold, the darkness is absolute.")
+    });
+
+    RegisterSlot(TEXT("trail_ambient"), {
+        TEXT("A twig snaps in the undergrowth. You freeze, but nothing emerges. The forest watches."),
+        TEXT("The wind shifts. For a moment you catch a sound like distant chanting — then it's gone, swallowed by the rustling leaves."),
+        TEXT("Your foot catches on something half-buried in the mud. A rusted belt buckle, embossed with the Thornhaven constabulary seal.")
+    });
+}
+
+void UDMNarrationPool::PopulateCombatDefaults()
+{
+    RegisterSlot(TEXT("combat_start"), {
+        TEXT("Shadows burst from the undergrowth! Goblins, their yellowed teeth bared, weapons drawn. Roll for initiative!"),
+        TEXT("A guttural shriek splits the air as goblins leap from behind the rocks. Steel flashes in the dim light. Combat begins!"),
+        TEXT("The ambush springs! Two goblins emerge from the fog, scimitars raised. There's no running now — prepare yourself!")
+    });
+
+    RegisterSlot(TEXT("combat_player_hit"), {
+        TEXT("Your strike connects! The blade bites deep."),
+        TEXT("A solid hit! Your enemy staggers back from the blow."),
+        TEXT("You find an opening and strike true.")
+    });
+
+    RegisterSlot(TEXT("combat_player_miss"), {
+        TEXT("Your attack goes wide, cutting only air."),
+        TEXT("The goblin ducks under your swing with surprising agility."),
+        TEXT("You overextend and miss. The goblin snarls.")
+    });
+
+    RegisterSlot(TEXT("combat_enemy_hit"), {
+        TEXT("The goblin's blade catches you! Pain flares along your side."),
+        TEXT("A scimitar slashes across your guard. You feel the sting of the cut."),
+        TEXT("The creature lunges and its blade finds purchase. You grit your teeth against the pain.")
+    });
+
+    RegisterSlot(TEXT("combat_enemy_miss"), {
+        TEXT("The goblin swipes at you but you twist away just in time."),
+        TEXT("A wild slash whistles past your ear. Too close."),
+        TEXT("The creature overcommits and stumbles. Its blade hits stone instead of flesh.")
+    });
+
+    RegisterSlot(TEXT("combat_victory"), {
+        TEXT("The last goblin crumples to the ground. Silence returns to the trail. You catch your breath, victorious."),
+        TEXT("It's over. The goblins lie defeated at your feet. The forest seems to exhale around you."),
+        TEXT("You stand over your fallen foes, breathing hard but alive. The Greymaw trail is clear — for now.")
+    });
+
+    RegisterSlot(TEXT("combat_defeat"), {
+        TEXT("The world dims as a goblin blade finds its mark. You collapse on the muddy trail... When you wake, you're back in the tavern. Marta is shaking her head. 'Found you on the trail, half-dead. Rest up.'"),
+        TEXT("Pain overwhelms you and darkness closes in. You wake later in the Thornhaven taproom, bandaged and sore. The trail will have to wait."),
+        TEXT("The last thing you see is a goblin grin. Then nothing. You come to in the tavern, your wounds tended. The trail remains unfinished business.")
+    });
+}
+
+void UDMNarrationPool::PopulateQuestDefaults()
+{
+    RegisterSlot(TEXT("quest_started"), {
+        TEXT("A new quest has been added to your journal."),
+        TEXT("Quest accepted. Check your journal for details."),
+        TEXT("You've taken on a new task. The journal has been updated.")
+    });
+
+    RegisterSlot(TEXT("quest_completed"), {
+        TEXT("Quest completed! Your journal has been updated."),
+        TEXT("Well done — another quest resolved."),
+        TEXT("The task is finished. Check your journal for the outcome.")
+    });
+}

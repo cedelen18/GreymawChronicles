@@ -1,7 +1,7 @@
 # First Playable - Quick Test Script
 
-**Sprint:** K
-**Time:** ~5 minutes
+**Sprint:** L
+**Time:** ~8 minutes
 **Prerequisite:** Successful Development Editor build (`GreymawChroniclesEditor Win64 Development`)
 
 ---
@@ -213,9 +213,56 @@ The following 10-prompt sequence exercises all Sprint K features in order. Can b
 
 ---
 
+## Sprint L Adventure Flow (8-Prompt Combat + Quest Sequence)
+
+The following sequence exercises all Sprint L features: combat, quest journal, scene transition, and dialogue. Run after or instead of the Sprint K sequence.
+
+### L1. `talk to marta` — Dialogue tree (if engaged/helpful)
+- **If NPC state is engaged/helpful:** Numbered dialogue options appear (1-4).
+- **Option 1:** "Tell me about the missing villagers" — reveals lore.
+- **Option 3:** (Requires `task:tavern_investigation=accepted`) "I've been investigating."
+- **Option 4:** "Never mind" — ends conversation.
+
+### L2. `accept the task` — Quest started
+- **Intent:** Accept. **Narration:** Task accepted (3 variants).
+- **Quest toast:** Quest journal updated.
+- **State:** `task:tavern_investigation = accepted`.
+
+### L3. `read the quest board` + `eavesdrop` — Gather clues
+- **Board:** `task_clue:board_notice = true`.
+- **Eavesdrop:** Perception DC 12. Pass -> `task_clue:overheard_snippet = true`.
+
+### L4. `report to marta` — Quest complete
+- **2+ clues:** Full resolution. `task:tavern_investigation = resolved`.
+- **Quest status:** Completed in quest journal.
+
+### L5. `leave the tavern` (or `go outside`, `head to the trail`)
+- **Guard:** Blocked if combat is active.
+- **Narration:** Trail arrival text (3 variants from `trail_arrive` pool).
+- **State:** `scene:current = greymaw_trail`.
+- **Red toast:** "COMBAT STARTED!" — goblin ambush auto-triggers.
+- **Narration:** Combat start text (3 variants from `combat_start` pool).
+
+### L6. `attack` — Player combat turn
+- **Roll:** d20 + STR modifier vs Goblin AC 15.
+- **Hit:** Damage narration (3 variants). Goblin HP reduced.
+- **Miss:** Miss narration (3 variants).
+- **Enemy turns:** Auto-resolve after player action. Red toast if player takes damage.
+
+### L7. Repeat `attack` until victory or defeat
+- **Victory (all goblins HP <= 0):** Victory narration. Green "COMBAT ENDED" toast. Auto-save.
+- **Defeat (player HP <= 0):** Defeat narration. Player HP reset to 1. Soft return to tavern.
+
+### L8. `gc.save 0` / `gc.load 0` — Multi-slot save/load
+- **Console:** `gc.save 0` -> saves to GreymawSlot_0. Toast confirms.
+- **Console:** `gc.load 0` -> loads from slot. Quest state, combat results persist.
+- **Verify:** Quest journal still shows completed quest after load.
+
+---
+
 ## Pass Criteria
 
-- All 26 base prompts + 10 Sprint K prompts produce narration text.
+- All 26 base prompts + 10 Sprint K prompts + 8 Sprint L prompts produce narration text.
 - Narration text **varies** on repeated attempts of the same prompt (narration pool).
 - Fuzzy matching works: synonyms and natural phrasing resolve to correct intent.
 - 3 micro-events trigger ability checks (perception DC 12, intimidation DC 13, sleight_of_hand DC 11).
@@ -230,6 +277,13 @@ The following 10-prompt sequence exercises all Sprint K features in order. Can b
 - **Sprint K: Task mini-loop** — accept task -> gather clues -> report -> resolution. 2+ clues required for full resolution.
 - **Sprint K: Save/Load feedback** — "Autosaved" and "Loaded save from <time>" toasts. `gc.save`/`gc.load` console commands work.
 - **Sprint K: Camera polish** — null-safe camera fallback, smoother blend times, no dead-air delays.
+- **Sprint L: Combat** — "leave tavern" triggers trail + goblin ambush. "attack"/"flee" work during combat. Victory/defeat resolve correctly.
+- **Sprint L: Quest journal** — accept task -> quest started. report -> quest completed. Quest status persists through save/load.
+- **Sprint L: Scene transition** — "leave tavern" changes scene to trail. Blocked during combat.
+- **Sprint L: Multi-slot save** — `gc.save 0`/`gc.load 0` work. 3 manual slots available.
+- **Sprint L: Audio framework** — no crashes from unregistered audio events (null-safe).
+- **Sprint L: Dialogue trees** — Marta shows numbered options when engaged/helpful. Conditional options filter by WorldState.
+- **Sprint L: Combat toasts** — red "COMBAT STARTED" / green "COMBAT ENDED" toasts appear.
 - Action feedback toasts appear mid-right with multi-line check breakdown (3 lines: header/roll/result) and auto-fade after ~5 seconds for checks.
 - Debug overlay updates state, action count, and check result correctly.
 - Player visually moves during movement-intent prompts.
@@ -239,7 +293,7 @@ The following 10-prompt sequence exercises all Sprint K features in order. Can b
 
 ## Automated Tests
 
-Run all tests (46 total):
+Run all tests (61 total):
 ```
 UnrealEditor-Cmd.exe <project> -ExecCmds="Automation RunTests GreymawChronicles" -NullRHI -NoSound
 ```
@@ -291,14 +345,35 @@ UnrealEditor-Cmd.exe <project> -ExecCmds="Automation RunTests GreymawChronicles"
 - `GreymawChronicles.SprintK.SaveLoad.FeedbackDelegateFires` — OnSaveLoadFeedback broadcasts correctly
 - `GreymawChronicles.SprintK.Intent.AcceptReport` — Accept/Report intents with keyword variants
 
+### Sprint L Tests (15):
+- `GreymawChronicles.SprintL.Combat.EnemyTemplateDefaults` — MakeGoblin() stats correct
+- `GreymawChronicles.SprintL.Combat.InitiativeOrder` — RollInitiative sorted TurnOrder
+- `GreymawChronicles.SprintL.Combat.TurnAdvancement` — AdvanceTurn cycles and wraps
+- `GreymawChronicles.SprintL.Combat.VictoryCondition` — All enemies dead -> Victory
+- `GreymawChronicles.SprintL.Combat.DefeatCondition` — Player dead -> Defeat
+- `GreymawChronicles.SprintL.Quest.StartAndQuery` — StartQuest -> Active status
+- `GreymawChronicles.SprintL.Quest.UpdateObjective` — UpdateObjective changes text
+- `GreymawChronicles.SprintL.Quest.CompleteQuest` — CompleteQuest -> Completed
+- `GreymawChronicles.SprintL.Scene.TrailNarrationExists` — Trail narration pool non-empty
+- `GreymawChronicles.SprintL.Scene.SceneIdTracking` — WorldState scene.current round-trip
+- `GreymawChronicles.SprintL.Save.MultiSlotNaming` — MakeSlotName(0/1/2) + clamping
+- `GreymawChronicles.SprintL.Save.QuestLogPersistence` — Quest JSON round-trip
+- `GreymawChronicles.SprintL.Audio.NullSafePlayback` — PlayEvent with null sound -> no crash
+- `GreymawChronicles.SprintL.Dialogue.OptionFiltering` — State-aware option filtering
+- `GreymawChronicles.SprintL.Dialogue.NodeChaining` — NextNodeId chains correctly
+
 ## Known Limitations
 
 - Mannequin mesh may not exist in all project configurations (NPC becomes invisible tagged actor).
 - Dynamic material tint is best-effort — depends on material parameter names.
 - Camera subsystem switches mode but has no physical camera actors placed.
 - Floor and bar use engine primitive meshes (white cubes) until tavern asset pack is imported.
-- Save slot is single-slot auto-save only (`gc.save`/`gc.load` console commands available for manual control).
+- Multi-slot save available via `gc.save 0/1/2` / `gc.load 0/1/2`. Auto-save continues as `GreymawSaveSlot_0`.
 - Tavern asset pack (Stylized Medieval Tavern, Baturinets) requires manual import from UE 5.4 dummy project.
 - NPC interaction state has no auto-recovery from "upset" — player must face consequences.
-- Task mini-loop is single-task only (tavern_investigation). Framework supports expansion.
+- Combat uses manual d20 rolls (enemies lack CharacterSheets). Only goblin ambush encounter scripted.
+- Dialogue trees are code-defined (Marta, Durgan). Data-driven loading from assets is future work.
+- Audio subsystem is code framework only — no .wav/.ogg assets included yet.
+- Scene transition is narrative-only (no level streaming or new geometry).
+- Quest journal and save/load UIs are code-constructed fallbacks (no UMG Blueprint).
 - Clue tracking is binary (found/not found) — no partial knowledge or quality levels.

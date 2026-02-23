@@ -9,6 +9,8 @@ class UGCPlayerInputWidget;
 class UGCHUDOverlayWidget;
 class UGCDebugOverlayWidget;
 class UGCActionFeedbackWidget;
+class UGCQuestJournalWidget;
+class UGCSaveLoadWidget;
 class UDMBrainSubsystem;
 
 UCLASS()
@@ -33,6 +35,14 @@ protected:
 
     UPROPERTY(meta = (BindWidgetOptional))
     TObjectPtr<UGCActionFeedbackWidget> ActionFeedback;
+
+    /** Sprint L: Quest journal panel. */
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UGCQuestJournalWidget> QuestJournal;
+
+    /** Sprint L: Save/load panel. */
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UGCSaveLoadWidget> SaveLoadPanel;
 
 private:
     UFUNCTION()

@@ -122,6 +122,7 @@ void UGCActionFeedbackWidget::BindToSubsystems()
             DMBrain->OnDMActionsReady.AddDynamic(this, &UGCActionFeedbackWidget::HandleActionsReady);
             DMBrain->OnDMDiceResolved.AddDynamic(this, &UGCActionFeedbackWidget::HandleDiceResolved);
             DMBrain->OnInventoryChanged.AddDynamic(this, &UGCActionFeedbackWidget::HandleInventoryChanged);
+            DMBrain->OnCombatStateChanged.AddDynamic(this, &UGCActionFeedbackWidget::HandleCombatStateChanged);
         }
 
         ActionDirector = GI->GetSubsystem<UActionDirectorSubsystem>();
@@ -199,4 +200,16 @@ void UGCActionFeedbackWidget::HandleSaveLoadFeedback(const FString& Message)
 {
     // Sprint K: Subtle dim grey toast for save/load, shorter duration
     PushToastWithDuration(Message, FLinearColor(0.5f, 0.5f, 0.5f, 0.7f), 2.0f);
+}
+
+void UGCActionFeedbackWidget::HandleCombatStateChanged(bool bInCombat)
+{
+    if (bInCombat)
+    {
+        PushToastWithDuration(TEXT("COMBAT STARTED"), FLinearColor(1.0f, 0.2f, 0.2f, 1.0f), 4.0f);
+    }
+    else
+    {
+        PushToastWithDuration(TEXT("COMBAT ENDED"), FLinearColor(0.2f, 1.0f, 0.4f, 1.0f), 4.0f);
+    }
 }

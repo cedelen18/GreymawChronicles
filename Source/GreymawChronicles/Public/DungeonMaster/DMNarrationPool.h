@@ -24,6 +24,15 @@ public:
     /** Populate the default tavern narration variants. */
     void PopulateTavernDefaults();
 
+    /** Sprint L: Populate trail scene narration variants. */
+    void PopulateTrailDefaults();
+
+    /** Sprint L: Populate combat narration variants. */
+    void PopulateCombatDefaults();
+
+    /** Sprint L: Populate quest narration variants. */
+    void PopulateQuestDefaults();
+
 private:
     TMap<FString, TArray<FString>> Pool;
     mutable TMap<FString, int32> LastUsedIndex;

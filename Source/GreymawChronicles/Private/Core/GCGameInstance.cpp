@@ -6,6 +6,7 @@
 #include "DungeonMaster/DMConversationHistory.h"
 #include "DungeonMaster/DMWorldStateSubsystem.h"
 #include "Gameplay/GCCharacterSheet.h"
+#include "Quest/GCQuestSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGCGameInstance, Log, All);
@@ -115,6 +116,13 @@ bool UGCGameInstance::SaveGame()
         SaveData->WorldStateJSON = WorldState->ToJSON();
     }
 
+    // Sprint L: Serialize QuestLog
+    UGCQuestSubsystem* QuestSys = GetSubsystem<UGCQuestSubsystem>();
+    if (QuestSys)
+    {
+        SaveData->QuestLogJSON = QuestSys->ToJSON();
+    }
+
     // 3. Timestamp
     SaveData->SaveTimestamp = FDateTime::UtcNow().ToIso8601();
 
@@ -179,6 +187,13 @@ bool UGCGameInstance::LoadGame()
         WorldState->FromJSON(SaveData->WorldStateJSON);
     }
 
+    // Sprint L: Restore QuestLog
+    UGCQuestSubsystem* QuestSys = GetSubsystem<UGCQuestSubsystem>();
+    if (QuestSys && !SaveData->QuestLogJSON.IsEmpty())
+    {
+        QuestSys->FromJSON(SaveData->QuestLogJSON);
+    }
+
     UE_LOG(LogGCGameInstance, Log, TEXT("Game loaded from slot '%s' (saved at %s)"),
         *UGreymawSaveGame::SaveSlotName, *SaveData->SaveTimestamp);
 
@@ -193,4 +208,108 @@ bool UGCGameInstance::HasSaveGame() const
 {
     return UGameplayStatics::DoesSaveGameExist(
         UGreymawSaveGame::SaveSlotName, UGreymawSaveGame::UserIndex);
+}
+
+bool UGCGameInstance::SaveToSlot(int32 SlotIndex)
+{
+    UGreymawSaveGame* SaveData = Cast<UGreymawSaveGame>(
+        UGameplayStatics::CreateSaveGameObject(UGreymawSaveGame::StaticClass()));
+    if (!SaveData)
+    {
+        return false;
+    }
+
+    // Populate save data (same as SaveGame)
+    UDMBrainSubsystem* DMBrain = GetSubsystem<UDMBrainSubsystem>();
+    if (DMBrain)
+    {
+        if (UGCCharacterSheet* Sheet = DMBrain->GetPlayerSheet())
+        {
+            SaveData->CharacterSheetJSON = Sheet->ToCompactJSON();
+        }
+        if (UDMConversationHistory* History = DMBrain->GetConversationHistory())
+        {
+            SaveData->ConversationHistoryJSON = History->SerializeToJSON();
+        }
+    }
+
+    UDMWorldStateSubsystem* WorldState = GetSubsystem<UDMWorldStateSubsystem>();
+    if (WorldState)
+    {
+        SaveData->WorldStateJSON = WorldState->ToJSON();
+    }
+
+    UGCQuestSubsystem* QuestSys = GetSubsystem<UGCQuestSubsystem>();
+    if (QuestSys)
+    {
+        SaveData->QuestLogJSON = QuestSys->ToJSON();
+    }
+
+    SaveData->SaveTimestamp = FDateTime::UtcNow().ToIso8601();
+    SaveData->SlotDisplayName = FString::Printf(TEXT("Manual Save %d"), SlotIndex);
+
+    const FString SlotName = UGreymawSaveGame::MakeSlotName(SlotIndex);
+    const bool bSaved = UGameplayStatics::SaveGameToSlot(SaveData, SlotName, UGreymawSaveGame::UserIndex);
+
+    if (bSaved)
+    {
+        UE_LOG(LogGCGameInstance, Log, TEXT("Game saved to slot '%s'"), *SlotName);
+        OnSaveLoadFeedback.Broadcast(FString::Printf(TEXT("Saved to slot %d"), SlotIndex));
+    }
+
+    return bSaved;
+}
+
+bool UGCGameInstance::LoadFromSlot(int32 SlotIndex)
+{
+    const FString SlotName = UGreymawSaveGame::MakeSlotName(SlotIndex);
+    if (!UGameplayStatics::DoesSaveGameExist(SlotName, UGreymawSaveGame::UserIndex))
+    {
+        return false;
+    }
+
+    UGreymawSaveGame* SaveData = Cast<UGreymawSaveGame>(
+        UGameplayStatics::LoadGameFromSlot(SlotName, UGreymawSaveGame::UserIndex));
+    if (!SaveData)
+    {
+        return false;
+    }
+
+    // Restore (same as LoadGame)
+    UDMBrainSubsystem* DMBrain = GetSubsystem<UDMBrainSubsystem>();
+    if (DMBrain)
+    {
+        if (UGCCharacterSheet* Sheet = DMBrain->GetPlayerSheet())
+        {
+            FString Error;
+            Sheet->FromJSON(SaveData->CharacterSheetJSON, Error);
+        }
+        if (UDMConversationHistory* History = DMBrain->GetConversationHistory())
+        {
+            History->DeserializeFromJSON(SaveData->ConversationHistoryJSON);
+        }
+    }
+
+    UDMWorldStateSubsystem* WorldState = GetSubsystem<UDMWorldStateSubsystem>();
+    if (WorldState)
+    {
+        WorldState->FromJSON(SaveData->WorldStateJSON);
+    }
+
+    UGCQuestSubsystem* QuestSys = GetSubsystem<UGCQuestSubsystem>();
+    if (QuestSys && !SaveData->QuestLogJSON.IsEmpty())
+    {
+        QuestSys->FromJSON(SaveData->QuestLogJSON);
+    }
+
+    UE_LOG(LogGCGameInstance, Log, TEXT("Game loaded from slot '%s' (saved at %s)"), *SlotName, *SaveData->SaveTimestamp);
+    OnSaveLoadFeedback.Broadcast(FString::Printf(TEXT("Loaded slot %d"), SlotIndex));
+
+    return true;
+}
+
+bool UGCGameInstance::HasSaveInSlot(int32 SlotIndex) const
+{
+    return UGameplayStatics::DoesSaveGameExist(
+        UGreymawSaveGame::MakeSlotName(SlotIndex), UGreymawSaveGame::UserIndex);
 }

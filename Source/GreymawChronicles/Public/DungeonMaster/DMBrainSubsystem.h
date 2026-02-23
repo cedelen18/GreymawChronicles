@@ -13,10 +13,12 @@ class UDMConversationHistory;
 class UDMIntentClassifier;
 class UDMNarrationPool;
 class UDMWorldStateSubsystem;
+class UDMDialogueTree;
 class UCombatResolver;
 class USpellSystem;
 class UDiceRoller;
 class UGCCharacterSheet;
+class UGCCombatEncounter;
 struct FDMIntentResult;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMNarration, const FString&, Narration);
@@ -24,6 +26,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMActionsReady, const TArray<FDMA
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMDiceResolved, const FAbilityCheckResult&, Result);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDMProcessingStateChanged, bool, bIsProcessing);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInventoryChanged, const FString&, ItemName);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCombatStateChanged, bool, bInCombat);
 
 UCLASS()
 class GREYMAWCHRONICLES_API UDMBrainSubsystem : public UGameInstanceSubsystem
@@ -77,6 +80,22 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "DM")
     FOnInventoryChanged OnInventoryChanged;
 
+    /** Sprint L: Fired when combat starts or ends. */
+    UPROPERTY(BlueprintAssignable, Category = "DM")
+    FOnCombatStateChanged OnCombatStateChanged;
+
+    /** Sprint L: Active combat encounter (nullptr when not in combat). */
+    UPROPERTY(BlueprintReadOnly, Category = "DM")
+    TObjectPtr<UGCCombatEncounter> ActiveEncounter;
+
+    /** Sprint L: Current dialogue node being presented (empty = not in dialogue). */
+    UPROPERTY(BlueprintReadOnly, Category = "DM")
+    FString ActiveDialogueNodeId;
+
+    /** Sprint L: Try to handle input as combat action. Returns true if in combat. */
+    UFUNCTION(BlueprintCallable, Category = "DM")
+    bool TryHandleCombatInput(const FString& PlayerInput);
+
 private:
     void OnOllamaCompletion(bool bSuccess, const FString& ResponseText, float LatencySeconds, FString OriginalPlayerInput);
     void ApplyWorldChanges(const TArray<FDMWorldChange>& WorldChanges);
@@ -121,6 +140,10 @@ private:
     /** Sprint I: Session-scoped world state for NPC dispositions */
     UPROPERTY()
     TObjectPtr<UDMWorldStateSubsystem> WorldState;
+
+    /** Sprint L: Branching dialogue tree for NPC conversations */
+    UPROPERTY()
+    TObjectPtr<UDMDialogueTree> DialogueTree;
 
     UPROPERTY(EditAnywhere, Category = "DM|Demo")
     bool bUseTavernScriptedBootstrap = true;
